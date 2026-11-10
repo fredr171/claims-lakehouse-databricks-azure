@@ -114,9 +114,11 @@ check → job outcomes go to the **notifier Azure Function** → GitHub issues.
 
 ### Gold
 - Written in SQL. A **payer registry** (one config list) is the only place gold learns about
-  payers. Each payer supplies conformed views (coverage spans, claim families) with identical
-  columns and types; payer code mappings (sex `1`/`2` vs `M`/`F`, `CANCELLED` vs `VOIDED`)
-  happen in the conformed views, never in the marts.
+  payers. Each payer supplies conformed views (coverage spans, claim families, and its current
+  deliveries for the delivery window) with identical columns and types, enforced by a contract
+  check; payer code mappings (sex `1`/`2` vs `M`/`F`, `CANCELLED` vs `VOIDED`) happen in the
+  conformed views, never in the marts. Mart SQL names its inputs with `${...}` placeholders
+  that a thin renderer fills from the registry, so the same SQL runs locally and on Databricks.
 - Marts: `dim_payer`, `dim_member` (one row per person across payers, keyed by MBI),
   `fct_claims`, `fct_member_months`, `agg_payer_monthly` (PMPM).
 - Definitions: a member month = covered any day of the month; PMPM = net paid by service month.
