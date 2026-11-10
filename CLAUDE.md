@@ -82,7 +82,8 @@ check → job outcomes go to the **notifier Azure Function** → GitHub issues.
 
 ### Bronze
 - Auto Loader reads the archive with every column as a string (codes keep leading zeros) and
-  adds lineage columns from `_metadata` (file path, checksum, delivery month, ingest timestamp).
+  adds lineage columns from `_metadata` (file path, checksum, delivery month, archive time
+  from the file's modification time, ingest timestamp).
 - Append-only. No updates or deletes.
 
 ### Silver
@@ -91,15 +92,16 @@ check → job outcomes go to the **notifier Azure Function** → GitHub issues.
   plain importable modules so they can be unit tested locally.
 - Staging: readable column names shared across payers, empty string → NULL, typed columns;
   codes and IDs stay strings.
-- A **current-delivery index** picks the latest ingested delivery of each file; silver reads only
-  current deliveries.
+- A **current-delivery index** picks the latest delivery of each file, ordered by archive time
+  (`_archived_at`), then checksum; silver reads only current deliveries. Not ingest time: Auto
+  Loader can ingest an original and its re-send in one micro-batch, giving both the same time.
 - **Stop vs warn gating:** row-level expectations use warn (`expect`), drop (`expect_or_drop`),
   or stop (`expect_or_fail`). The aggregate rule (an amount rule escalates to stop when more
   than 1% of a month's lines break it) is **not** a row-level expectation: implement it as a
   per-month quality table with a fail expectation on the error ratio, or as a job task.
   A stop must leave previously published silver and gold intact.
-- **Member history (SCD type 2)** uses AUTO CDC with `SEQUENCE BY` delivery month plus ingest
-  timestamp as a tiebreaker. Change type (new, update, termination) is derived, not trusted
+- **Member history (SCD type 2)** uses AUTO CDC with `SEQUENCE BY` delivery month plus archive
+  time (`_archived_at`) as a tiebreaker. Change type (new, update, termination) is derived, not trusted
   from the file.
 - **Supersession:** AUTO CDC handles out-of-order arrivals but does not retract changes from a
   delivery that a corrected re-send replaced. This must be handled explicitly (for example,
