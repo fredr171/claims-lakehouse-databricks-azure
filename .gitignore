@@ -218,3 +218,26 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local Spark
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Generated synthetic data (tests generate it into a temp dir; this is for manual runs)
+output/
+answer_key/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+
+# Databricks
+.databricks/
+
+# Azure Functions local settings (hold connection strings)
+local.settings.json

@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claims-lakehouse"
+version = "0.1.0"
+description = "Event-driven claims lakehouse on Azure and Databricks (CMS CCLF + Humana MA)"
+readme = "README.md"
+# Python 3.12 is the version on the Databricks serverless runtime.
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    # Local Spark for the silver unit tests (needs Java 17). Databricks provides its own.
+    "pyspark>=4.0,<4.1",
+    # Test data and answer keys. Pinned to a release: the tests hardcode its seed-42 counts.
+    "synthetic-payer-files @ git+https://github.com/fredr171/synthetic-payer-files@v1.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "slow: end-to-end tests over all 36 generated months (excluded in CI with -m 'not slow')",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
