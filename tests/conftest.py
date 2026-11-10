@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from harness import FIRST_MONTH, LAST_MONTH
+from harness import FIRST_MONTH, LAST_MONTH, LocalArchive, months
 from synthetic_payer_files import generate_cclf, generate_humana
 
 from claims_lakehouse.config import load_config
@@ -57,16 +57,26 @@ def generated(tmp_path_factory) -> Path:
     Layout: cms/YYYY-MM/CCLF*.csv, humana/YYYY-MM/HUM_*.csv, key/, key/humana/.
     """
     root = tmp_path_factory.mktemp("generated")
-    months = ["--seed", "42", "--start", FIRST_MONTH, "--end", LAST_MONTH]
+    month_args = ["--seed", "42", "--start", FIRST_MONTH, "--end", LAST_MONTH]
     generate_cclf.main(
-        [*months, "--output-dir", str(root / "cms"), "--answer-key-dir", str(root / "key")]
+        [*month_args, "--output-dir", str(root / "cms"), "--answer-key-dir", str(root / "key")]
     )
     generate_humana.main(
         [
-            *months,
+            *month_args,
             "--output-dir", str(root / "humana"),
             "--answer-key-dir", str(root / "key" / "humana"),
             "--crossover-dir", str(root / "key"),
         ]
     )  # fmt: skip
     return root
+
+
+@pytest.fixture(scope="session")
+def full_load(config, generated, tmp_path_factory):
+    """Every generated month delivered in order: (LocalArchive, validation results)."""
+    archive = LocalArchive(tmp_path_factory.mktemp("full"), config)
+    results = []
+    for month in months():
+        results.extend(archive.deliver_month(generated, month))
+    return archive, results

@@ -137,30 +137,23 @@ def test_corrected_resend_is_appended_and_becomes_current(spark, config, tmp_pat
     archive = LocalArchive(tmp_path, config)
     original = archive.deliver_file(fixture("valid"), LANDING)
     resend = archive.deliver_file(fixture("valid_quoted"), LANDING)  # same name, new bytes
-    bronze = archive.bronze(spark, "claims_diagnosis")
+    bronze = archive.bronze(spark, "claims_diagnosis").cache()
 
-    assert bronze.count() == 6  # append-only: both deliveries stay in bronze
     index = {r._checksum: r for r in delivery_index(bronze).collect()}
+    # Append-only: both deliveries stay in bronze.
+    assert (index[original.checksum].row_count, index[resend.checksum].row_count) == (3, 3)
     assert index[original.checksum].delivery_version == 1
     assert not index[original.checksum].is_current
     assert index[resend.checksum].delivery_version == 2
     assert index[resend.checksum].is_current
     current = current_rows(bronze)
     assert current.columns == bronze.columns
-    assert {r._checksum for r in current.collect()} == {resend.checksum}
-    assert current.count() == 3
+    current_checksums = [r._checksum for r in current.collect()]
+    assert current_checksums == [resend.checksum] * 3
+    bronze.unpersist()
 
 
 # --- The full generated dataset ----------------------------------------------------------
-
-
-@pytest.fixture(scope="module")
-def full_load(config, generated, tmp_path_factory):
-    archive = LocalArchive(tmp_path_factory.mktemp("full"), config)
-    results = []
-    for month in months():
-        results.extend(archive.deliver_month(generated, month))
-    return archive, results
 
 
 @pytest.mark.slow
