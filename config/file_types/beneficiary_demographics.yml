@@ -1,0 +1,41 @@
+# CCLF8 Beneficiary demographics: one row per beneficiary per delivery
+# in which it is new or changed (full row, current values).
+# expected_columns: the header of CCLF8_YYYYMM.csv from synthetic-payer-files v1.0.0,
+# in order (tests/test_config.py checks them against a generated delivery).
+feed: cclf
+file_type: beneficiary_demographics
+
+# Named groups year and month are required: they give the delivery month.
+file_name_regex: '^CCLF8_(?P<year>\d{4})(?P<month>0[1-9]|1[0-2])\.csv$'
+
+# Must be non-empty on every row (the payer's keys for the record).
+key_columns:
+  - BENE_MBI_ID
+
+expected_columns:
+  - BENE_MBI_ID
+  - BENE_HIC_NUM
+  - BENE_FIPS_STATE_CD
+  - BENE_FIPS_CNTY_CD
+  - BENE_ZIP_CD
+  - BENE_DOB
+  - BENE_SEX_CD
+  - BENE_RACE_CD
+  - BENE_AGE
+  - BENE_MDCR_STUS_CD
+  - BENE_DUAL_STUS_CD
+  - BENE_DEATH_DT
+  - BENE_RNG_BGN_DT
+  - BENE_RNG_END_DT
+  - BENE_1ST_NAME
+  - BENE_MIDL_NAME
+  - BENE_LAST_NAME
+  - BENE_ORGNL_ENTLMT_RSN_CD
+  - BENE_ENTLMT_BUYIN_IND
+  - BENE_PART_A_ENRLMT_BGN_DT
+  - BENE_PART_B_ENRLMT_BGN_DT
+  - BENE_LINE_1_ADR
+  - GEO_ZIP_PLC_NAME
+  - GEO_USPS_STATE_CD
+  - GEO_ZIP5_CD
+  - RECORD_CHANGE_TYPE
