@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 from validation_fixtures import DATA_VALUES, FILE_NAME, FIXTURE_DIR, FIXTURES
 
-from claims_lakehouse.config import load_config
 from claims_lakehouse.validation.checks import CheckStatus
 from claims_lakehouse.validation.outcome import (
     archive_path,
@@ -19,11 +18,6 @@ from claims_lakehouse.validation.outcome import (
 from claims_lakehouse.validation.validate import CHECK_NAMES, validate_file
 
 LANDING = f"cms/cclf/claims_diagnosis/{FILE_NAME}"
-
-
-@pytest.fixture(scope="module")
-def config():
-    return load_config()
 
 
 def fixture(case: str) -> Path:
