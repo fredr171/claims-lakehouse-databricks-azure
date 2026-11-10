@@ -18,6 +18,7 @@ from claims_lakehouse.silver.cclf.staging import (
     BENEFICIARY_DEMOGRAPHICS,
     BENEFICIARY_TRACKED_COLUMNS,
 )
+from claims_lakehouse.silver.quality import evaluate
 
 pytestmark = pytest.mark.slow
 
@@ -197,3 +198,11 @@ def test_totals_and_counts_match_the_summary(silver, generated):
     members = silver["beneficiary_versions"].where("is_current")
     assert members.count() == summary["beneficiaries"]
     assert members.where("death_date is not null").count() == summary["deaths"]
+
+
+def test_clean_deliveries_pass_every_expectation(silver):
+    """Every row expectation and gate table passes on the generated data (the quality
+    tests show each one failing on broken data)."""
+    for table, expectations in cclf_tables.EXPECTATIONS.items():
+        _, results = evaluate(silver[table], expectations)
+        assert [r for r in results if not r.passed] == [], table

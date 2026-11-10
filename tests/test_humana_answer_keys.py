@@ -16,6 +16,7 @@ from pyspark.sql import functions as F
 from claims_lakehouse.silver.humana import tables as humana_tables
 from claims_lakehouse.silver.humana.amount_rules import amount_problem
 from claims_lakehouse.silver.humana.staging import MEMBER_ELIGIBILITY, MEMBER_TRACKED_COLUMNS
+from claims_lakehouse.silver.quality import evaluate
 
 pytestmark = pytest.mark.slow
 
@@ -285,3 +286,11 @@ def test_member_id_and_mbi_are_one_to_one(silver):
         .count()
         == 0
     )
+
+
+def test_clean_deliveries_pass_every_expectation(silver):
+    """Every row expectation and gate table passes on the generated data (the quality
+    tests show each one failing on broken data)."""
+    for table, expectations in humana_tables.EXPECTATIONS.items():
+        _, results = evaluate(silver[table], expectations)
+        assert [r for r in results if not r.passed] == [], table
