@@ -99,7 +99,9 @@ check → job outcomes go to the **notifier Azure Function** → GitHub issues.
   or stop (`expect_or_fail`). The aggregate rule (an amount rule escalates to stop when more
   than 1% of a month's lines break it) is **not** a row-level expectation: implement it as a
   per-month quality table with a fail expectation on the error ratio, or as a job task.
-  A stop must leave previously published silver and gold intact.
+  A stop must leave previously published silver and gold intact: every published table of a
+  payer depends on that payer's gate tables, so a failed expectation blocks the whole payer.
+  Row expectations check formats on the delivered text, before typing (`try_cast` is lenient).
 - **Member history (SCD type 2)** uses AUTO CDC with `SEQUENCE BY` delivery month plus archive
   time (`_archived_at`) as a tiebreaker. Change type (new, update, termination) is derived, not trusted
   from the file.

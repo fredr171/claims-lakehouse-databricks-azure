@@ -19,6 +19,7 @@ field of the 36-month dataset against Python's csv module.
 
 from __future__ import annotations
 
+import csv
 import re
 import shutil
 from dataclasses import dataclass
@@ -95,16 +96,28 @@ class LocalArchive:
         return result
 
     def deliver_month(
-        self, generated: Path, month: str, feeds: tuple[str, ...] = ("cclf", "humana")
+        self,
+        generated: Path,
+        month: str,
+        feeds: tuple[str, ...] = ("cclf", "humana"),
+        replace: dict[str, Path] | None = None,
     ) -> list[ValidationResult]:
-        """Deliver every generated file of a month for the given feeds."""
+        """Deliver every generated file of a month for the given feeds.
+
+        replace: file name -> a local file delivered instead (an edited copy).
+        """
+        replace = replace or {}
         results = []
         for feed in feeds:
             for local_file in sorted((generated / _GENERATED_DIRS[feed] / month).glob("*.csv")):
-                results.append(
-                    self.deliver_file(local_file, self.landing_path(feed, local_file.name))
-                )
+                source = replace.get(local_file.name, local_file)
+                results.append(self.deliver_file(source, self.landing_path(feed, local_file.name)))
         return results
+
+    def deliver_generated(self, generated: Path, feed: str, file_type: str, month: str):
+        """Deliver one generated file."""
+        path = generated_file(self.config, generated, file_type, month)
+        return self.deliver_file(path, self.landing_path(feed, path.name))
 
     def landing_path(self, feed_name: str, file_name: str) -> str:
         """Where a file of this name lands: the file type whose name pattern matches."""
@@ -140,3 +153,30 @@ class LocalArchive:
 
 
 _GENERATED_DIRS = {"cclf": "cms", "humana": "humana"}
+
+
+def generated_file(config: LakehouseConfig, generated: Path, file_type: str, month: str) -> Path:
+    """The generated file of a file type for a delivery month."""
+    ft = config.file_types[file_type]
+    folder = generated / _GENERATED_DIRS[ft.feed.name] / month
+    [path] = [p for p in folder.iterdir() if re.match(ft.file_name_regex, p.name)]
+    return path
+
+
+def edited_copy(source: Path, target_dir: Path, edit) -> Path:
+    """A copy of a delivered CSV with edit(rows) applied (rows: list of dicts), same name.
+
+    The copy is a different file (new checksum): delivered under the same name it is a
+    corrected re-send, or a broken delivery.
+    """
+    with source.open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        header, rows = reader.fieldnames, list(reader)
+    rows = edit(rows)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / source.name
+    with target.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, header, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+    return target
