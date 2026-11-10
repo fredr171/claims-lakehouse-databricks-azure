@@ -103,12 +103,16 @@ class LakehouseConfig:
     file_types: dict[str, FileType]
     payers: tuple[Payer, ...]
 
+    def feed_for_path(self, path: str) -> Feed | None:
+        """The feed whose prefix the path is under (prefixes never overlap)."""
+        return next((f for f in self.feeds if path.startswith(f.prefix)), None)
+
     def parse_landing_path(self, path: str) -> LandingPath | None:
         """Split '<feed prefix><file_type>/<file_name>'.
 
         None for paths outside every feed or at any other depth: those are not deliveries.
         """
-        feed = next((f for f in self.feeds if path.startswith(f.prefix)), None)
+        feed = self.feed_for_path(path)
         if feed is None:
             return None
         parts = path[len(feed.prefix) :].split("/")
