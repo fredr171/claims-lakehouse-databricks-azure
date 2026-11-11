@@ -2,7 +2,7 @@
 
 An event-driven claims lakehouse on Azure and Databricks. It ingests monthly healthcare claims
 deliveries from two payers, CMS CCLF (Medicare fee-for-service) and Humana Medicare Advantage,
-through a medallion architecture: landing → bronze → silver → gold.
+through a medallion architecture: landing â†’ bronze â†’ silver â†’ gold.
 
 It is the sibling of [claims-lakehouse-dbt-duckdb](https://github.com/fredr171/claims-lakehouse-dbt-duckdb)
 (AWS, Lambda, dbt-duckdb). Both use the same synthetic data from
@@ -11,10 +11,16 @@ its **answer keys** (the exact results a correct pipeline produces) exactly. The
 decisions are the same; the stack is platform-native. Where this repo differs, the reason is
 below. All data is synthetic.
 
-> **Status:** phase 1 (local foundation) is done: config, file validation, silver and gold
-> logic, and tests against both answer keys, all running locally on PySpark. Azure
-> infrastructure (phase 2), Databricks pipelines and jobs (phase 3), and the notifier, CI
-> and dashboard (phase 4) come next.
+> **Status:** phases 1 and 2 are done.
+> - **Phase 1:** config, file validation, silver and gold logic, and tests against both
+>   answer keys, all running locally on PySpark.
+> - **Phase 2:** Terraform for storage, Event Grid, the validation Function, Key Vault and
+>   the Databricks workspace. Verified live: a valid file is archived, a broken one is
+>   quarantined with its report, a repeat is a duplicate, and the archive refuses deletes.
+>   `terraform destroy` removes all 27 resources; Azure leaves the Databricks managed resource group behind (being investigated).
+>
+> Databricks pipelines and jobs (phase 3), and the notifier, CI and dashboard (phase 4)
+> come next.
 
 **Stack:** Python 3.12, PySpark 4 (Databricks serverless), Lakeflow Declarative Pipelines,
 Auto Loader, Unity Catalog, Azure Functions, Event Grid, ADLS Gen2, Terraform, Databricks
@@ -48,7 +54,7 @@ flowchart LR
 
 ## Key decisions, layer by layer
 
-### 1. Validation (landing → archive): whole files, before Auto Loader
+### 1. Validation (landing â†’ archive): whole files, before Auto Loader
 - Auto Loader is row-oriented and cannot reject a whole file, so a **Python Azure Function
   validates every file first** and Auto Loader only ever sees the archive. Checks, from one
   YAML file per file type: landing path, known file type, file name, size, no BOM, encoding,
@@ -110,8 +116,8 @@ flowchart LR
   table against the same keys.
 - **Claim families and net paid:** status comes from which versions are present (CCLF) or
   still active, meaning not reversed (Humana), never from file order. CCLF: any cancellation
-  → cancelled, else the latest adjustment by claim load date. Humana: an active replacement
-  → replaced, else an active original (paid or denied), else voided.
+  â†’ cancelled, else the latest adjustment by claim load date. Humana: an active replacement
+  â†’ replaced, else an active original (paid or denied), else voided.
   **Differs from the sibling:** Humana net paid uses the same status rule as CCLF rather than
   a sum of every version. They agree whenever history is complete (a test checks this). They
   differ only for a reversal whose original never arrived, which nets to 0 instead of a
@@ -170,7 +176,7 @@ its claim voided. Every result equals a clean load of the corrected files.
   Each payer supplies three **conformed views** in SQL: coverage spans, claim families, and
   current deliveries for its delivery window. They have identical columns and types,
   enforced by a contract check. Code mappings such as sex `1`/`2` vs `M`/`F`, `CANCELLED`
-  vs `VOIDED`, and `REPLACED` → `ADJUSTED` happen there, never in a mart.
+  vs `VOIDED`, and `REPLACED` â†’ `ADJUSTED` happen there, never in a mart.
 - Mart SQL names its inputs with `${...}` placeholders that a thin renderer fills from the
   registry (where the sibling uses dbt macros), so the same SQL runs locally and on Databricks.
 - **Payer lifecycle:**
@@ -259,7 +265,7 @@ Set `JAVA_HOME` to the JDK 17 folder if `java` is not on `PATH`.
 
 ### Infrastructure
 
-Requires Terraform 1.9+ and the Azure CLI, signed in with `az login`. Choose a suffix of 3–7
+Requires Terraform 1.9+ and the Azure CLI, signed in with `az login`. Choose a suffix of 3â€“7
 lowercase letters or digits; it makes the storage and Key Vault names globally unique.
 
 ```powershell
