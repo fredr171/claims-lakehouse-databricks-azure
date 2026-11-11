@@ -16,6 +16,7 @@ resources:
             path: ../src/pipelines/bronze.py
       configuration:
         claims_lakehouse.archive_url: ${var.archive_url}
+        claims_lakehouse.catalog: ${var.catalog}
       environment:
         dependencies:
           - pyyaml>=6

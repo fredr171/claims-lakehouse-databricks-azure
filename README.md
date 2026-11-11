@@ -207,8 +207,22 @@ its claim voided. Every result equals a clean load of the corrected files.
     `awaiting_data` until its first file arrives.
   - **Retire:** set `retired_month`. History stays, but the payer is no longer current coverage.
   - **Offboard:** remove the entry. The payer drops out of every mart.
-- No names, addresses or full birth dates in gold. In silver they will be protected with
-  Unity Catalog column masks.
+- **No names, addresses or full birth dates in gold** (only birth year). Where they exist, in
+  bronze and silver, **Unity Catalog column masks** protect them
+  (`claims_lakehouse/silver/masks.py`):
+  - Every table that holds one declares it with a mask, under its delivered name (bronze,
+    `*_current`) or its staged name (staging, member history). A reader outside the PII
+    readers group sees `[masked]` for text and NULL for a date.
+  - **The pipelines and the job run as a service principal that is in the group**, so
+    silver and gold are computed from real values while people querying the tables see
+    masked ones. Without that, a mask would also hide the values from the tables built
+    downstream, and member history would break.
+  - Lakeflow takes a mask only as part of a table's full schema, so the schemas are derived
+    from the tables' own build functions run on empty inputs, never written by hand. A test
+    requires each declared schema to equal the schema of the table built from real data.
+    That test caught a type the AUTO CDC conversion produced differently (int vs bigint).
+  - The mask functions are created by the job's first task, because Terraform has no
+    resource for SQL functions.
 - **On Databricks**, each payer pipeline publishes its conformed views in its own schema
   (`silver_cclf`, `silver_humana`). The gold task renders the same mart SQL against those
   Unity Catalog names and writes the marts as tables in `gold`. A registered payer whose
@@ -218,8 +232,8 @@ its claim voided. Every result equals a clean load of the corrected files.
 The job is a Databricks Asset Bundle (`databricks.yml`, `resources/`):
 
 ```
-file arrives in archive ─► bronze ─┬─► prepare_cclf ──► full refresh? ─► silver_cclf ───┐
-                                   └─► prepare_humana ► full refresh? ─► silver_humana ─┴─► gold ─► answer_keys
+file arrives ─► create_masks ─► bronze ─┬─► prepare_cclf ──► full refresh? ─► silver_cclf ───┐
+in archive                              └─► prepare_humana ► full refresh? ─► silver_humana ─┴─► gold ─► answer_keys
 ```
 
 - **File-arrival trigger on the archive**, so the job sees only validated files. It waits
@@ -235,7 +249,12 @@ file arrives in archive ─► bronze ─┬─► prepare_cclf ──► full r
   are missing and passes.
 - **Serverless everywhere**: the pipelines and the Python tasks. Terraform owns the
   workspace and every Unity Catalog object (storage credential, external locations,
-  catalog, schemas, the answer-key volume); the bundle owns only code-level resources.
+  catalog, schemas, the answer-key volume, the runner service principal, the PII readers
+  group, and the runner's grants); the bundle owns only code-level resources.
+- **The runner has only what it needs:**
+  - read files on the archive (nothing can write it);
+  - create and refresh tables in the data schemas;
+  - create the mask functions and read the answer keys in `ops`.
 
 ### 6. Infrastructure: Terraform, keyless, torn down between runs
 - **Terraform** (`infra/terraform/`) owns everything, in Central US and tagged
@@ -359,6 +378,7 @@ the Azure CLI login, and takes the workspace and archive from the environment:
 ```powershell
 $env:DATABRICKS_HOST = "https://" + (terraform -chdir=infra/terraform output -raw databricks_workspace_url)
 $env:BUNDLE_VAR_archive_url = terraform -chdir=infra/terraform output -raw archive_url
+$env:BUNDLE_VAR_runner_application_id = terraform -chdir=infra/terraform output -raw runner_application_id
 databricks bundle validate
 databricks bundle deploy   # creates the pipelines and the job (billable when they run)
 ```

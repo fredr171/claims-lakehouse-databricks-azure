@@ -18,6 +18,20 @@ variables:
     default: claims_lakehouse_dev
   archive_url:
     description: abfss URL of the archive container, ending in / (terraform output archive_url)
+  runner_application_id:
+    description: Service principal the pipelines and the job run as (terraform output runner_application_id)
+  pii_readers_group:
+    description: Sees unmasked names, addresses and birth dates (terraform output pii_readers_group)
+    default: claims-lakehouse-pii-readers-dev
+
+# The runner is in the PII readers group, so pipelines compute from unmasked values while
+# people querying the tables see masked ones. It also needs to read the synced code.
+run_as:
+  service_principal_name: ${var.runner_application_id}
+
+permissions:
+  - service_principal_name: ${var.runner_application_id}
+    level: CAN_MANAGE
 
 sync:
   # Only the code the pipelines and tasks import, and the validation config they read.

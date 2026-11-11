@@ -17,6 +17,14 @@ locals {
     access_connector    = "dbac-${local.project}-${var.environment}"
     storage_credential  = "claims_lakehouse_lake_${var.environment}"
     catalog             = "claims_lakehouse_${var.environment}"
+    runner              = "${local.project}-runner-${var.environment}"
+    pii_readers         = "${local.project}-pii-readers-${var.environment}"
+  }
+
+  # Unity Catalog privileges of the runner (runner.tf).
+  runner_privileges = {
+    data = ["USE_SCHEMA", "SELECT", "MODIFY", "CREATE_TABLE", "CREATE_MATERIALIZED_VIEW"]
+    ops  = ["USE_SCHEMA", "CREATE_FUNCTION", "EXECUTE", "READ_VOLUME"]
   }
 
   # Containers in the lake account, in flow order (see the README). `unity` holds the

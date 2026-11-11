@@ -1,6 +1,6 @@
 # The lakehouse job: a file arriving in the archive starts it.
 #
-#   bronze -> per payer: prepare -> full refresh? -> silver (full or incremental)
+#   create_masks -> bronze -> per payer: prepare -> full refresh? -> silver (full or incremental)
 #          -> gold (runs even if a payer stopped) -> answer-key check
 #
 # One run at a time, so a feed never has two runs in flight. Python tasks run on serverless.
@@ -26,7 +26,14 @@ resources:
               - pyyaml>=6
 
       tasks:
+        # The pipelines' schemas name the column-mask functions, so they come first.
+        - task_key: create_masks
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/jobs/create_masks.py
+            parameters: [--src, "${workspace.file_path}/src", --catalog, "${var.catalog}", --group, "${var.pii_readers_group}"]
         - task_key: bronze
+          depends_on: [{ task_key: create_masks }]
           pipeline_task:
             pipeline_id: ${resources.pipelines.bronze.id}
 

@@ -36,3 +36,13 @@ output "archive_url" {
   description = "Auto Loader source and the job's file-arrival trigger."
   value       = databricks_external_location.archive.url
 }
+
+output "runner_application_id" {
+  description = "The service principal the pipelines and the job run as (bundle run_as)."
+  value       = databricks_service_principal.runner.application_id
+}
+
+output "pii_readers_group" {
+  description = "Members see unmasked names, addresses and birth dates."
+  value       = databricks_group.pii_readers.display_name
+}
