@@ -49,3 +49,22 @@ resource "databricks_grants" "archive" {
     privileges = ["READ_FILES"]
   }
 }
+
+# Whoever runs Terraform (and deploys the bundle) may set the runner as a job's or a
+# pipeline's run_as: that needs the Service Principal User role on it, which creating the
+# service principal does not grant.
+# The account ID comes from the workspace's public discovery document, so none is committed.
+data "http" "workspace_config" {
+  url = "https://${azurerm_databricks_workspace.main.workspace_url}/.well-known/databricks-config"
+}
+
+data "databricks_current_user" "deployer" {}
+
+resource "databricks_access_control_rule_set" "runner_users" {
+  name = "accounts/${jsondecode(data.http.workspace_config.response_body).account_id}/servicePrincipals/${databricks_service_principal.runner.application_id}/ruleSets/default"
+
+  grant_rules {
+    principals = [data.databricks_current_user.deployer.acl_principal_id]
+    role       = "roles/servicePrincipal.user"
+  }
+}

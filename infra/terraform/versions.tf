@@ -14,6 +14,10 @@ terraform {
       source  = "databricks/databricks"
       version = "~> 1.0"
     }
+    http = {
+      source  = "hashicorp/http"
+      version = "~> 3.0"
+    }
   }
 
   # Partial configuration: the values come from backend.hcl, which

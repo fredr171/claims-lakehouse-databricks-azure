@@ -69,7 +69,8 @@ resource "azapi_resource" "validation_function" {
   body = {
     kind = "functionapp,linux"
     properties = {
-      serverFarmId = azurerm_service_plan.validation.id
+      # Azure stores the ID with lowercase `serverfarms`; match it so plans stay clean.
+      serverFarmId = replace(azurerm_service_plan.validation.id, "Microsoft.Web/serverFarms", "Microsoft.Web/serverfarms")
       httpsOnly    = true
       functionAppConfig = {
         deployment = {
