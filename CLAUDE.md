@@ -45,7 +45,8 @@ and the README should be clean and easy to follow.
 - Compute quota is small (10 regional vCPUs, DSv3 family only). **Use serverless compute by
   default** for jobs, pipelines and SQL. When classic compute is unavoidable, use
   `Standard_DS3_v2`, single-node or one worker, with auto-termination.
-- Infrastructure is torn down between live runs. `terraform destroy` must always work cleanly.
+- Infrastructure is torn down between live runs with `infra/teardown.ps1` (`terraform destroy`
+  plus the Databricks managed resource group Azure leaves behind). It must always work cleanly.
 
 ## Architecture
 
