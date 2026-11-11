@@ -1,0 +1,55 @@
+# Lakeflow Declarative Pipelines: bronze, then one silver pipeline per payer, so a stop in
+# one payer never blocks the other. All serverless. root_path puts the synced src folder on
+# sys.path, so the pipelines import claims_lakehouse straight from the repo code.
+
+resources:
+  pipelines:
+    bronze:
+      name: claims-lakehouse-bronze
+      catalog: ${var.catalog}
+      schema: bronze
+      serverless: true
+      channel: CURRENT
+      root_path: ../src
+      libraries:
+        - file:
+            path: ../src/pipelines/bronze.py
+      configuration:
+        claims_lakehouse.archive_url: ${var.archive_url}
+      environment:
+        dependencies:
+          - pyyaml>=6
+
+    silver_cclf:
+      name: claims-lakehouse-silver-cclf
+      catalog: ${var.catalog}
+      schema: silver_cclf
+      serverless: true
+      channel: CURRENT
+      root_path: ../src
+      libraries:
+        - file:
+            path: ../src/pipelines/silver.py
+      configuration:
+        claims_lakehouse.feed: cclf
+        claims_lakehouse.catalog: ${var.catalog}
+      environment:
+        dependencies:
+          - pyyaml>=6
+
+    silver_humana:
+      name: claims-lakehouse-silver-humana
+      catalog: ${var.catalog}
+      schema: silver_humana
+      serverless: true
+      channel: CURRENT
+      root_path: ../src
+      libraries:
+        - file:
+            path: ../src/pipelines/silver.py
+      configuration:
+        claims_lakehouse.feed: humana
+        claims_lakehouse.catalog: ${var.catalog}
+      environment:
+        dependencies:
+          - pyyaml>=6

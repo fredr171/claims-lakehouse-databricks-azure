@@ -1,0 +1,41 @@
+# Databricks Asset Bundle: the code-level resources (pipelines and the job).
+# Terraform owns the workspace, Unity Catalog objects and storage (infra/terraform).
+#
+# The workspace comes from DATABRICKS_HOST and the archive URL from BUNDLE_VAR_archive_url
+# (see .env.example); neither is committed.
+#   databricks bundle validate
+#   databricks bundle deploy      # creates billable resources: ask first
+
+bundle:
+  name: claims-lakehouse
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog (terraform output catalog)
+    default: claims_lakehouse_dev
+  archive_url:
+    description: abfss URL of the archive container, ending in / (terraform output archive_url)
+
+sync:
+  # Only the code the pipelines and tasks import, and the validation config they read.
+  include:
+    - src/**
+    - config/**
+  exclude:
+    - "**/__pycache__/**"
+    - .venv/**
+    - tests/**
+    - infra/**
+    - functions/**
+    - build/**
+    - spark-warehouse/**
+
+targets:
+  dev:
+    default: true
+    # Not development mode: it would pause the file-arrival trigger.
+    workspace:
+      root_path: ~/.bundle/${bundle.name}/${bundle.target}
