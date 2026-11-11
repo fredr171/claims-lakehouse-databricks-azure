@@ -69,9 +69,11 @@ Invoke-Az storage container-rm create --storage-account $account `
 $accountId = Invoke-Az storage account show --name $account --resource-group $resourceGroup `
     --query id -o tsv
 $role = 'Storage Blob Data Contributor'
-$existing = Invoke-Az role assignment list --assignee $userId --scope $accountId `
-    --role $role --query 'length(@)' -o tsv
-if ($existing -eq '0') {
+# Count in PowerShell: az is a .cmd wrapper on Windows, and cmd.exe mangles JMESPath
+# functions such as length(@).
+$existing = @(Invoke-Az role assignment list --assignee $userId --scope $accountId `
+        --role $role --query '[].id' -o tsv)
+if ($existing.Count -eq 0) {
     Write-Host "Granting $role to the signed-in user"
     Invoke-Az role assignment create --assignee-object-id $userId `
         --assignee-principal-type User --role $role --scope $accountId -o none
