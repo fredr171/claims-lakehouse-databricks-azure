@@ -58,7 +58,8 @@ and the README should be clean and easy to follow.
 | Silver | Delta tables / views (Lakeflow Declarative Pipelines) | Typed, renamed, current deliveries; member history (SCD2); claim families with net paid |
 | Gold | Delta tables (Unity Catalog) | Payer-agnostic marts |
 
-Flow: a file lands in `landing` → Event Grid → **validation Azure Function** → valid files are
+Flow: a file lands in `landing` → Event Grid → storage queue → **validation Azure Function**
+(Flex Consumption, queue trigger) → valid files are
 copied to `archive`, invalid files go to `quarantine` → a Lakeflow Job (file-arrival trigger on
 the archive) runs Auto Loader into bronze, then the per-payer pipelines, then the answer-key
 check → job outcomes go to the **notifier Azure Function** → GitHub issues.
