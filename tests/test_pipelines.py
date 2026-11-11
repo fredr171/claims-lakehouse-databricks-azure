@@ -15,6 +15,7 @@ from pyspark.sql import functions as F
 
 from claims_lakehouse.bronze.lineage import bronze_table_name
 from claims_lakehouse.gold.build import build_conformed
+from claims_lakehouse.jobs.supersession import needs_full_refresh, superseded_deliveries
 from claims_lakehouse.silver.cclf import tables as cclf_tables
 from claims_lakehouse.silver.humana import tables as humana_tables
 from claims_lakehouse.silver.member_history import SEQUENCE_COLUMNS
@@ -100,6 +101,18 @@ def test_member_history_is_auto_cdc_from_current_deliveries(payer):
     assert flow["target"] in defs.streaming_tables
     assert str(flow["sequence_by"]) == str(F.struct(*SEQUENCE_COLUMNS))
     assert flow["except_column_list"] == ["_archived_at"]
+
+
+def test_the_published_supersession_count_is_what_the_job_compares(spark, config, payer):
+    """The pipeline's <history>_superseded and the job's count from bronze must agree, or
+    the job would full-refresh on every run (or never)."""
+    feed, _, built, _ = payer
+    history = TABLES[feed].MEMBER_HISTORY
+    name = f"{CATALOG}.bronze.{bronze_table_name(config.file_types[history.file_type])}"
+    in_bronze = superseded_deliveries(spark.read.table(view_name(name)))
+    published = built[f"{history.table}_superseded"].first()["superseded"]
+    assert in_bronze == published == 1  # the fixture's re-send
+    assert not needs_full_refresh(in_bronze, published)
 
 
 def test_published_tables_equal_the_local_build(payer):

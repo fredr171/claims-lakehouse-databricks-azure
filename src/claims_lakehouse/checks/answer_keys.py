@@ -68,6 +68,26 @@ def _differing(expected: Mapping, actual: Mapping) -> int:
     return sum(1 for k in expected.keys() | actual.keys() if expected.get(k) != actual.get(k))
 
 
+def missing_months(marts: Mapping[str, DataFrame], keys: Path) -> dict[str, int]:
+    """Payer -> how many months of the answer keys' window gold has not received yet.
+
+    The answer keys describe the complete delivery, so the job compares only once every
+    month has arrived; while files are still landing, runs report what is missing instead.
+    """
+    delivered = {
+        r.payer_id: r.last_delivery_month
+        for r in marts["dim_payer"].select("payer_id", "last_delivery_month").collect()
+    }
+    missing = {}
+    for payer_id in KEY_DIRS:
+        months = sorted(r["month"] for r in _read_csv(_key(keys, payer_id, MEMBER_MONTHS_FILE)))
+        last = delivered.get(payer_id)
+        received = last.strftime("%Y-%m") if last else ""
+        if behind := sum(1 for m in months if m > received):
+            missing[payer_id] = behind
+    return missing
+
+
 def check_gold(marts: Mapping[str, DataFrame], keys: Path) -> list[Mismatch]:
     """Every mismatch between the marts and the answer keys; empty means gold is right."""
     problems: list[Mismatch] = []

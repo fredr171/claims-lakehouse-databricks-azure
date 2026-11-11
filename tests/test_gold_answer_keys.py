@@ -20,6 +20,7 @@ from pyspark.sql import functions as F
 from claims_lakehouse.checks.answer_keys import (
     check_gold,
     expected_member_months,
+    missing_months,
     write_member_month_keys,
 )
 from claims_lakehouse.gold.build import build_conformed, build_gold
@@ -171,7 +172,19 @@ def keys(config, generated, tmp_path_factory):
 
 
 def test_the_job_check_passes_on_a_correct_load(gold, keys):
+    assert missing_months(gold, keys) == {}
     assert check_gold(gold, keys) == []
+
+
+def test_the_job_check_waits_until_every_month_is_delivered(gold, keys):
+    """Two months short for one payer: the check reports them missing (and compares nothing)."""
+    short = gold["dim_payer"].withColumn(
+        "last_delivery_month",
+        F.when(F.col("payer_id") == "humana_ma", F.lit("2025-10-01").cast("date")).otherwise(
+            F.col("last_delivery_month")
+        ),
+    )
+    assert missing_months({**gold, "dim_payer": short}, keys) == {"humana_ma": 2}
 
 
 def _broken(gold, name, df):
