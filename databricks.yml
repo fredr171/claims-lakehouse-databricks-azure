@@ -32,6 +32,8 @@ run_as:
 permissions:
   - service_principal_name: ${var.runner_application_id}
     level: CAN_MANAGE
+  - user_name: ${workspace.current_user.userName}  # whoever deploys
+    level: CAN_MANAGE
 
 sync:
   # Only the code the pipelines and tasks import, and the validation config they read.
@@ -45,7 +47,6 @@ sync:
     - infra/**
     - functions/**
     - build/**
-    - spark-warehouse/**
 
 targets:
   dev:
