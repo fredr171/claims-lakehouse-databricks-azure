@@ -25,7 +25,7 @@ Asset Bundles, pytest, ruff.
 ```mermaid
 flowchart LR
     payer["Payer CSV<br/>monthly delivery"] --> landing[("landing<br/>ADLS Gen2")]
-    landing --> eg["Event Grid"] --> fn["Validation Function<br/>file-level checks"]
+    landing --> eg["Event Grid"] --> q[["landing-events queue"]] --> fn["Validation Function<br/>file-level checks"]
     fn -->|valid| archive[("archive<br/>checksum-keyed, immutable")]
     fn -->|invalid| quarantine[("quarantine<br/>+ error report")]
     archive --> al["Auto Loader<br/>(file-arrival job)"] --> bronze[("bronze<br/>Delta, all strings")]
@@ -170,6 +170,30 @@ its claim voided. Every result equals a clean load of the corrected files.
 - No names, addresses or full birth dates in gold. In silver they will be protected with
   Unity Catalog column masks.
 
+### 5. Infrastructure: Terraform, keyless, torn down between runs
+- **Terraform** (`infra/terraform/`) owns everything, in Central US and tagged
+  `project = claims-lakehouse-azure`. Names are defined once in `locals.tf`. Remote state
+  lives in a separate account that `infra/bootstrap/bootstrap-state.ps1` creates, so
+  `terraform destroy` never touches it.
+- **No storage keys anywhere.** Both storage accounts disable shared-key access, and the
+  Function, Event Grid and Databricks reach storage through managed identities with
+  narrow roles.
+- **Event Grid delivers to a storage queue, not straight to the Function.** The subscription
+  can then be created before any Function code exists, events wait while the Function is
+  redeployed, and failed deliveries go to a dead-letter container. On an ADLS Gen2 account
+  a file is created empty and then flushed, so the subscription passes only the calls that
+  finish a file (`FlushWithClose`, `PutBlob`, `PutBlockList`, `CopyBlob`).
+- **The validation Function runs on Flex Consumption** (Python 3.12), billed per execution.
+- **Kept inside a ~$25/month budget:**
+  - **Serverless compute** for jobs, pipelines and SQL.
+  - **No NAT gateway in Databricks.** Classic clusters get public IPs (with no inbound ports
+    open) rather than the NAT gateway that secure cluster connectivity would add on the
+    default network, which alone would cost more than the budget. Production would use VNet
+    injection.
+  - **A daily cap on Log Analytics.**
+  - **Key Vault without purge protection,** so the environment can be destroyed and
+    rebuilt under the same names.
+
 ## Testing
 
 `pytest` with a local Spark session; no Azure access needed. A local harness stands in for
@@ -217,3 +241,19 @@ py -3.12 -m venv .venv
 ```
 
 Set `JAVA_HOME` to the JDK 17 folder if `java` is not on `PATH`.
+
+### Infrastructure
+
+Requires Terraform 1.9+ and the Azure CLI, signed in with `az login`. Choose a suffix of 3–7
+lowercase letters or digits; it makes the storage and Key Vault names globally unique.
+
+```powershell
+./infra/bootstrap/bootstrap-state.ps1 -Suffix <suffix>   # once: remote-state account
+Copy-Item infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars  # set suffix
+$env:ARM_SUBSCRIPTION_ID = az account show --query id -o tsv
+cd infra/terraform
+terraform init "-backend-config=backend.hcl"
+terraform plan
+terraform apply      # creates billable resources
+terraform destroy    # between live runs
+```
