@@ -1,13 +1,13 @@
-"""How the Humana silver tables are built from bronze, and the expectations on each.
+"""The Humana silver tables: what each reads, how it is built and the expectations it carries.
 
-The Humana pipeline (phase 3) defines one table per entry, each calling the same
-functions; the local tests call build() directly. EXPECTATIONS names the expectations each
-table carries (claims_lakehouse.silver.quality).
+TABLES is the one list both runtimes use (claims_lakehouse.silver.spec): the local tests
+call build(), and the Humana pipeline defines one table per entry.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
+from functools import partial
 
 from pyspark.sql import DataFrame
 
@@ -20,42 +20,85 @@ from claims_lakehouse.silver.member_history import member_versions
 from claims_lakehouse.silver.quality import (
     KEYS_UNIQUE,
     RULE_BREAK_EXPECTATIONS,
-    Expectation,
     duplicate_key_check,
     rule_breaks_by_month,
+)
+from claims_lakehouse.silver.spec import (
+    MemberHistory,
+    SilverTable,
+    bronze,
+    build_tables,
+    check_tables,
+    expectations_by_table,
 )
 
 FILE_TYPES = ("member_eligibility", "medical_claim_lines")
 
+MEMBER_HISTORY = MemberHistory(
+    table="member_versions",
+    source="stg_member_eligibility",
+    file_type="member_eligibility",
+    key="member_id",
+    tracked=tuple(MEMBER_TRACKED_COLUMNS),
+    coverage_end="enrollment_end_date",
+)
 
-# Silver table -> the expectations it carries. Tables not listed carry none.
-EXPECTATIONS: dict[str, list[Expectation]] = {
-    **{f"{ft}_current": ROW_EXPECTATIONS[ft] for ft in FILE_TYPES},
-    **{f"{ft}_key_check": [KEYS_UNIQUE] for ft in FILE_TYPES},
-    "medical_claim_line_amount_check": RULE_BREAK_EXPECTATIONS,
-}
+
+def _per_file_type(file_type: str) -> list[SilverTable]:
+    key, across_months = UNIQUE_KEYS[file_type]
+    return [
+        SilverTable(f"{file_type}_deliveries", (bronze(file_type),), delivery_index),
+        SilverTable(
+            f"{file_type}_current",
+            (bronze(file_type), f"{file_type}_deliveries"),
+            current_rows,
+            tuple(ROW_EXPECTATIONS[file_type]),
+        ),
+        SilverTable(
+            f"{file_type}_key_check",
+            (f"{file_type}_current",),
+            partial(duplicate_key_check, key=key, across_months=across_months),
+            (KEYS_UNIQUE,),
+        ),
+        SilverTable(
+            f"stg_{file_type}",
+            (f"{file_type}_current",),
+            partial(stage_file, file_type=file_type),
+        ),
+    ]
 
 
-def build(bronze: Mapping[str, DataFrame]) -> dict[str, DataFrame]:
-    """bronze: file type -> its bronze table. Returns silver table name -> DataFrame."""
-    tables: dict[str, DataFrame] = {}
-    for file_type in FILE_TYPES:
-        tables[f"{file_type}_deliveries"] = delivery_index(bronze[file_type])
-        current = current_rows(bronze[file_type], tables[f"{file_type}_deliveries"])
-        tables[f"{file_type}_current"] = current
-        key, across_months = UNIQUE_KEYS[file_type]
-        tables[f"{file_type}_key_check"] = duplicate_key_check(current, key, across_months)
-        tables[f"stg_{file_type}"] = stage_file(current, file_type)
+def _amount_check(staged_lines: DataFrame) -> DataFrame:
+    return rule_breaks_by_month(staged_lines, amount_problem())
 
-    tables["member_versions"] = member_versions(
-        tables["stg_member_eligibility"],
-        key="member_id",
-        tracked=MEMBER_TRACKED_COLUMNS,
-        coverage_end="enrollment_end_date",
-    )
-    tables["medical_claim_line_amount_check"] = rule_breaks_by_month(
-        tables["stg_medical_claim_lines"], amount_problem()
-    )
-    tables["claim_versions"] = claim_versions(tables["stg_medical_claim_lines"])
-    tables["claim_families"] = claim_families(tables["claim_versions"])
-    return tables
+
+TABLES: list[SilverTable] = [
+    *[table for ft in FILE_TYPES for table in _per_file_type(ft)],
+    SilverTable(
+        MEMBER_HISTORY.table,
+        (MEMBER_HISTORY.source,),
+        partial(
+            member_versions,
+            key=MEMBER_HISTORY.key,
+            tracked=MEMBER_HISTORY.tracked,
+            coverage_end=MEMBER_HISTORY.coverage_end,
+        ),
+        published=True,
+    ),
+    SilverTable(
+        "medical_claim_line_amount_check",
+        ("stg_medical_claim_lines",),
+        _amount_check,
+        tuple(RULE_BREAK_EXPECTATIONS),
+    ),
+    SilverTable("claim_versions", ("stg_medical_claim_lines",), claim_versions),
+    SilverTable("claim_families", ("claim_versions",), claim_families, published=True),
+]
+check_tables(TABLES, MEMBER_HISTORY)
+
+EXPECTATIONS = expectations_by_table(TABLES)
+
+
+def build(bronze_tables: Mapping[str, DataFrame]) -> dict[str, DataFrame]:
+    """bronze_tables: file type -> its bronze table. Returns silver table name -> DataFrame."""
+    return build_tables(TABLES, bronze_tables)

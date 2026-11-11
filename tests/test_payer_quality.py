@@ -51,7 +51,7 @@ def test_every_expectation_has_a_broken_row():
 
 
 def test_tables_carry_the_row_expectations():
-    assert cclf_tables.EXPECTATIONS["claims_header_current"] is ROW_EXPECTATIONS["claims_header"]
+    assert cclf_tables.EXPECTATIONS["claims_header_current"] == ROW_EXPECTATIONS["claims_header"]
     assert set(humana_tables.EXPECTATIONS) >= {
         "member_eligibility_current",
         "medical_claim_lines_key_check",
