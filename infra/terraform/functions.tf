@@ -50,57 +50,71 @@ resource "azurerm_service_plan" "validation" {
   tags                = local.tags
 }
 
-resource "azurerm_function_app_flex_consumption" "validation" {
-  name                = local.names.validation_function
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  service_plan_id     = azurerm_service_plan.validation.id
-
-  storage_container_type      = "blobContainer"
-  storage_container_endpoint  = "${azurerm_storage_account.func.primary_blob_endpoint}${azurerm_storage_container.func_deploy.name}"
-  storage_authentication_type = "SystemAssignedIdentity"
-
-  # Python 3.12 matches the repo's local environment and Databricks serverless.
-  runtime_name           = "python"
-  runtime_version        = "3.12"
-  maximum_instance_count = 40
-  instance_memory_in_mb  = 2048
-  https_only             = true
+# Defined with azapi rather than azurerm_function_app_flex_consumption, which always
+# injects a key-based AzureWebJobsStorage connection string (hashicorp/terraform-provider-azurerm#29149).
+# This storage account rejects keys, so the host could not reach its queue. The body
+# follows Microsoft's Flex Consumption managed-identity sample.
+resource "azapi_resource" "validation_function" {
+  type      = "Microsoft.Web/sites@2025-03-01"
+  name      = local.names.validation_function
+  parent_id = azurerm_resource_group.main.id
+  location  = azurerm_resource_group.main.location
+  tags      = local.tags
 
   identity {
-    type = "SystemAssigned"
+    type         = "SystemAssigned"
+    identity_ids = []
   }
 
-  app_settings = {
-    # Identity-based connection to the Function's own storage (queue trigger, host state).
-    "AzureWebJobsStorage__accountName" = azurerm_storage_account.func.name
-
-    LANDING_EVENTS_QUEUE = local.landing_events_queue
-    LAKE_BLOB_ENDPOINT   = azurerm_storage_account.lake.primary_blob_endpoint
-    LANDING_CONTAINER    = "landing"
-    ARCHIVE_CONTAINER    = "archive"
-    QUARANTINE_CONTAINER = "quarantine"
+  body = {
+    kind = "functionapp,linux"
+    properties = {
+      serverFarmId = azurerm_service_plan.validation.id
+      httpsOnly    = true
+      functionAppConfig = {
+        deployment = {
+          storage = {
+            type           = "blobContainer"
+            value          = "${azurerm_storage_account.func.primary_blob_endpoint}${azurerm_storage_container.func_deploy.name}"
+            authentication = { type = "SystemAssignedIdentity" }
+          }
+        }
+        scaleAndConcurrency = {
+          maximumInstanceCount = 40
+          instanceMemoryMB     = 2048
+        }
+        # Python 3.12 matches the repo's local environment and Databricks serverless.
+        runtime = { name = "python", version = "3.12" }
+      }
+      siteConfig = {
+        minTlsVersion = "1.2"
+        appSettings = [
+          # Identity-based connection to the Function's own storage (queue trigger, host
+          # state). There is deliberately no AzureWebJobsStorage connection string.
+          { name = "AzureWebJobsStorage__accountName", value = azurerm_storage_account.func.name },
+          { name = "APPLICATIONINSIGHTS_CONNECTION_STRING", value = azurerm_application_insights.main.connection_string },
+          { name = "LANDING_EVENTS_QUEUE", value = local.landing_events_queue },
+          { name = "LAKE_BLOB_ENDPOINT", value = azurerm_storage_account.lake.primary_blob_endpoint },
+          { name = "LANDING_CONTAINER", value = "landing" },
+          { name = "ARCHIVE_CONTAINER", value = "archive" },
+          { name = "QUARANTINE_CONTAINER", value = "quarantine" },
+        ]
+      }
+    }
   }
-
-  site_config {
-    application_insights_connection_string = azurerm_application_insights.main.connection_string
-  }
-
-  tags = local.tags
 }
-
 # The Function's identity on its own storage: deployment package and host state (blob),
 # queue trigger (receive, delete, poison queue).
 resource "azurerm_role_assignment" "validation_func_blob" {
   scope                = azurerm_storage_account.func.id
   role_definition_name = "Storage Blob Data Owner"
-  principal_id         = azurerm_function_app_flex_consumption.validation.identity[0].principal_id
+  principal_id         = azapi_resource.validation_function.identity[0].principal_id
 }
 
 resource "azurerm_role_assignment" "validation_func_queue" {
   scope                = azurerm_storage_account.func.id
   role_definition_name = "Storage Queue Data Contributor"
-  principal_id         = azurerm_function_app_flex_consumption.validation.identity[0].principal_id
+  principal_id         = azapi_resource.validation_function.identity[0].principal_id
 }
 
 # On the lake: read landing, write archive and quarantine. The archive's WORM policy
@@ -108,5 +122,5 @@ resource "azurerm_role_assignment" "validation_func_queue" {
 resource "azurerm_role_assignment" "validation_lake" {
   scope                = azurerm_storage_account.lake.id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = azurerm_function_app_flex_consumption.validation.identity[0].principal_id
+  principal_id         = azapi_resource.validation_function.identity[0].principal_id
 }

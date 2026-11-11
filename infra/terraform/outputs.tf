@@ -11,7 +11,7 @@ output "lake_dfs_endpoint" {
 }
 
 output "validation_function_name" {
-  value = azurerm_function_app_flex_consumption.validation.name
+  value = azapi_resource.validation_function.name
 }
 
 output "key_vault_name" {

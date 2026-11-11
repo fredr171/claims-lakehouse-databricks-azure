@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 2.0"
+    }
   }
 
   # Partial configuration: the values come from backend.hcl, which
@@ -36,3 +40,7 @@ provider "azurerm" {
   # Storage accounts here disallow shared keys, so data-plane calls use Entra ID.
   storage_use_azuread = true
 }
+
+# Only for resources azurerm cannot express correctly (see functions.tf). Uses the same
+# Azure CLI sign-in and ARM_SUBSCRIPTION_ID as azurerm.
+provider "azapi" {}

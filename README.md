@@ -195,6 +195,10 @@ its claim voided. Every result equals a clean load of the corrected files.
   a file is created empty and then flushed, so the subscription passes only the calls that
   finish a file (`FlushWithClose`, `PutBlob`, `PutBlockList`, `CopyBlob`).
 - **The validation Function runs on Flex Consumption** (Python 3.12), billed per execution.
+  The app is defined with the `azapi` provider: azurerm's Flex Consumption resource always
+  adds a key-based `AzureWebJobsStorage` connection string
+  ([hashicorp/terraform-provider-azurerm#29149](https://github.com/hashicorp/terraform-provider-azurerm/issues/29149)),
+  which a keyless storage account rejects.
 - **Kept inside a ~$25/month budget:**
   - **Serverless compute** for jobs, pipelines and SQL.
   - **No NAT gateway in Databricks.** Classic clusters get public IPs (with no inbound ports
