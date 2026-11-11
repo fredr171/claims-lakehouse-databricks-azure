@@ -66,6 +66,17 @@ flowchart LR
   file (same checksum) is skipped. **Checksum-keyed paths are needed for correctness:** Auto
   Loader never reprocesses a path it has seen, so a corrected re-send under the same name
   would otherwise be silently dropped.
+- **Handling is idempotent**, because Event Grid delivers at least once
+  (`src/claims_lakehouse/validation/landing.py`).
+  - **Archiving never overwrites.** The archive write is a single create-if-absent call,
+    so a repeated event is recorded as a duplicate.
+  - **Quarantine writes are repeatable.** They overwrite, so a retried rejection rewrites
+    the same file and report.
+  - **The file read must match the event.** It must still have the event's ETag. If a payer
+    replaced the file in landing first, the newer upload has its own event.
+
+  The Function in `functions/validation/` is only a queue trigger around this handler and
+  an Azure SDK implementation of its storage interface.
 - **The archive is write-once.** A container-level time-based immutability (WORM) policy stops
   any archived delivery from being overwritten or deleted during retention, so the archive,
   not bronze, is the audit record. The lake has a hierarchical namespace, which Unity Catalog
@@ -256,4 +267,13 @@ terraform init "-backend-config=backend.hcl"
 terraform plan
 terraform apply      # creates billable resources
 terraform destroy    # between live runs
+```
+
+Deploy the validation Function after `apply` (dependencies install in a remote build):
+
+```powershell
+./functions/validation/build.ps1
+$fn = terraform -chdir=infra/terraform output -raw validation_function_name
+az functionapp deployment source config-zip -g rg-claims-lakehouse-dev -n $fn `
+    --src build/validation.zip --build-remote true
 ```
