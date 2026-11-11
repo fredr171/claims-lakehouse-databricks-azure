@@ -7,6 +7,9 @@
 
 resource "databricks_service_principal" "runner" {
   display_name = local.names.runner
+  # Without it the runner cannot run anything in the workspace (jobs fail with "does not
+  # have access to Databricks Workspace"), and the job's file-arrival trigger never fires.
+  workspace_access = true
 }
 
 resource "databricks_group" "pii_readers" {
@@ -62,6 +65,13 @@ data "databricks_current_user" "deployer" {}
 
 resource "databricks_access_control_rule_set" "runner_users" {
   name = "accounts/${jsondecode(data.http.workspace_config.response_body).account_id}/servicePrincipals/${databricks_service_principal.runner.application_id}/ruleSets/default"
+
+  # The rule set replaces every role on the service principal, so it must keep Manager for
+  # the deployer too: without it, Terraform can no longer read or change the rule set.
+  grant_rules {
+    principals = [data.databricks_current_user.deployer.acl_principal_id]
+    role       = "roles/servicePrincipal.manager"
+  }
 
   grant_rules {
     principals = [data.databricks_current_user.deployer.acl_principal_id]
