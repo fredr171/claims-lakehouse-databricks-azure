@@ -66,6 +66,12 @@ flowchart LR
   file (same checksum) is skipped. **Checksum-keyed paths are needed for correctness:** Auto
   Loader never reprocesses a path it has seen, so a corrected re-send under the same name
   would otherwise be silently dropped.
+- **The archive is write-once.** A container-level time-based immutability (WORM) policy stops
+  any archived delivery from being overwritten or deleted during retention, so the archive,
+  not bronze, is the audit record. The lake has a hierarchical namespace, which Unity Catalog
+  requires and which rules out blob versioning, so container-level WORM is the protection
+  available. The policy is left unlocked so the dev environment can be torn down; production
+  would lock it.
 
 ### 2. Bronze: every delivery, as delivered
 - All columns are strings (codes keep their leading zeros), plus lineage: feed, file type,

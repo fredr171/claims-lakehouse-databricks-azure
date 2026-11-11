@@ -26,6 +26,17 @@ resource "azurerm_storage_container" "lake" {
   container_access_type = "private"
 }
 
+# The archive is the audit record: write once, never modified or deleted during retention.
+# Hierarchical-namespace accounts do not support blob versioning or version-level WORM, so
+# this is a container-level time-based policy. It stays unlocked so `terraform destroy`
+# can remove it between live runs; a production deployment would lock it.
+resource "azurerm_storage_container_immutability_policy" "archive" {
+  storage_container_resource_manager_id = azurerm_storage_container.lake["archive"].id
+  immutability_period_in_days           = var.archive_retention_days
+  protected_append_writes_all_enabled   = false
+  locked                                = false
+}
+
 # Lets the person running Terraform upload test deliveries to landing and inspect the
 # other containers.
 resource "azurerm_role_assignment" "deployer_lake" {

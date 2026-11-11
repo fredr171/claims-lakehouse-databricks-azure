@@ -14,6 +14,12 @@ variable "environment" {
   default     = "dev"
 }
 
+variable "archive_retention_days" {
+  description = "Days an archived delivery stays immutable (container-level WORM on the archive)."
+  type        = number
+  default     = 365
+}
+
 variable "location" {
   description = "Azure region for every resource."
   type        = string

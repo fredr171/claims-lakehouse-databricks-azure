@@ -77,8 +77,12 @@ check → job outcomes go to the **notifier Azure Function** → GitHub issues.
 - **Checksum-keyed paths are required for correctness**, not just tidiness: Auto Loader tracks
   files by path and does not reprocess a path it has seen, so a corrected re-send under the
   same name would otherwise be silently skipped.
-- The archive container uses blob versioning and an immutability policy. **The archive files are
-  the immutable record**; bronze Delta tables are a queryable copy, not the audit trail.
+- The archive container has a **container-level time-based immutability (WORM) policy**. The lake
+  is hierarchical-namespace (Unity Catalog needs it), and those accounts support neither blob
+  versioning nor version-level WORM. The policy stays unlocked so `terraform destroy` works;
+  production would lock it. Nothing may rename, move or delete archive files (no Auto Loader
+  `cleanSource`). **The archive files are the immutable record**; bronze Delta tables are a
+  queryable copy, not the audit trail.
 
 ### Bronze
 - Auto Loader reads the archive with every column as a string (codes keep leading zeros) and
