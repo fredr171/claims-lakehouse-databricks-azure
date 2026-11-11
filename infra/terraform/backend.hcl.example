@@ -1,0 +1,6 @@
+# infra/bootstrap/bootstrap-state.ps1 writes backend.hcl (git-ignored) in this shape.
+resource_group_name  = "rg-claims-lakehouse-tfstate"
+storage_account_name = "sttfstateclaimsabc12"
+container_name       = "tfstate"
+key                  = "claims-lakehouse-dev.tfstate"
+use_azuread_auth     = true
