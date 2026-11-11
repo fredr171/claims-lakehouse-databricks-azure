@@ -2,21 +2,26 @@
 
 Silver -> each payer's conformed views -> the marts, exactly as the job will run them.
 Member months are checked for every month against an independent count from the delivered
-eligibility files (the generator's own coverage-span rule), not just the last month.
+eligibility files (the generator's own coverage-span rule), not just the last month. The
+job's own check (check_gold) must pass here and report each kind of broken gold.
 """
 
-import calendar
 import csv
 import json
 import re
+import shutil
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 
 import pytest
 from pyspark.sql import functions as F
-from synthetic_payer_files.cclf_common import coverage_spans
 
+from claims_lakehouse.checks.answer_keys import (
+    check_gold,
+    expected_member_months,
+    write_member_month_keys,
+)
 from claims_lakehouse.gold.build import build_conformed, build_gold
 from claims_lakehouse.gold.marts import MARTS
 from claims_lakehouse.silver.cclf import tables as cclf_tables
@@ -126,38 +131,6 @@ def test_dim_member_matches_the_crossover_answer_key(gold, generated):
 
 # --- Member months, every month, against an independent count -------------------------------
 
-ELIGIBILITY = {
-    "cms_ffs": ("cms", "beneficiary_demographics", "BENE_MBI_ID", "BENE_RNG_BGN_DT",
-                "BENE_RNG_END_DT", "BENE_DEATH_DT", "BENE_MBI_ID"),
-    "humana_ma": ("humana", "member_eligibility", "MEMBER_ID", "ENROLLMENT_START_DT",
-                  "ENROLLMENT_END_DT", "DEATH_DT", "MBI"),
-}  # fmt: skip
-
-
-def expected_member_months(config, generated, payer_id) -> dict[str, int]:
-    folder, file_type, key, start, end, death, mbi = ELIGIBILITY[payer_id]
-    pattern = config.file_types[file_type].file_name_regex
-    rows = []
-    for month_dir in sorted((generated / folder).iterdir()):
-        [path] = [p for p in month_dir.iterdir() if re.match(pattern, p.name)]
-        with path.open(newline="", encoding="utf-8") as f:
-            rows.extend(csv.DictReader(f))
-    deaths = {r[key]: date.fromisoformat(r[death]) for r in rows if r[death]}
-    mbis = {r[key]: r[mbi] for r in rows}
-    counts = {}
-    for month_dir in sorted((generated / folder).iterdir()):
-        year, mon = map(int, month_dir.name.split("-"))
-        first, last = date(year, mon, 1), date(year, mon, calendar.monthrange(year, mon)[1])
-        covered = set()
-        for member, spans in coverage_spans(rows, key, start, end).items():
-            for span_start, span_end in spans:
-                if member in deaths and (span_end is None or deaths[member] < span_end):
-                    span_end = deaths[member]
-                if span_start <= last and (span_end is None or span_end >= first):
-                    covered.add(mbis[member])
-        counts[month_dir.name] = len(covered)
-    return counts
-
 
 @pytest.mark.parametrize("payer_id", list(PAYERS.values()))
 def test_member_months_match_the_delivered_coverage_every_month(gold, config, generated, payer_id):
@@ -183,3 +156,47 @@ def test_marts_reconcile(gold):
 def test_no_names_addresses_or_birth_dates_in_gold(gold):
     for name in MARTS:
         assert not PROTECTED & set(gold[name].columns), name
+
+
+# --- The job's answer-key check (claims_lakehouse.checks.answer_keys) ------------------------
+
+
+@pytest.fixture(scope="module")
+def keys(config, generated, tmp_path_factory):
+    """The generator's answer keys plus member_months.csv, as uploaded to the volume."""
+    keys = tmp_path_factory.mktemp("answer_keys")
+    shutil.copytree(generated / "key", keys, dirs_exist_ok=True)
+    write_member_month_keys(config, generated, keys)
+    return keys
+
+
+def test_the_job_check_passes_on_a_correct_load(gold, keys):
+    assert check_gold(gold, keys) == []
+
+
+def _broken(gold, name, df):
+    return {**gold, name: df}
+
+
+BREAKS = {
+    "net_paid_by_service_month": lambda g: _broken(
+        g, "fct_claims",
+        g["fct_claims"].withColumn("net_paid_amount", F.col("net_paid_amount") + F.lit(1))),
+    "member_months": lambda g: _broken(
+        g, "fct_member_months",
+        g["fct_member_months"].where(F.date_format("month", "yyyy-MM") != "2024-06")),
+    "claim_statuses": lambda g: _broken(
+        g, "fct_claims", g["fct_claims"].where(F.col("claim_status") != "DENIED")),
+    "payer_switchers": lambda g: _broken(
+        g, "dim_member", g["dim_member"].withColumn("current_payer_id", F.lit("cms_ffs"))),
+    "pmpm_net_paid_total": lambda g: _broken(
+        g, "agg_payer_monthly", g["agg_payer_monthly"].limit(1)),
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("check", list(BREAKS))
+def test_the_job_check_reports_broken_gold(gold, keys, check):
+    problems = check_gold(BREAKS[check](gold), keys)
+    assert check in {p.check for p in problems}
+    for problem in problems:  # counts only, never data values
+        assert not re.search(r"\b[0-9][A-Z0-9]{10}\b|\d+\.\d{2}", str(problem)), problem
