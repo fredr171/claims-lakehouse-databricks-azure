@@ -23,10 +23,13 @@ provider "azurerm" {
       recover_soft_deleted_key_vaults = true
     }
 
-    # Application Insights otherwise creates a "Failure Anomalies" alert rule outside
-    # Terraform, which then blocks deleting the resource group.
-    application_insights {
-      disable_generated_rule = true
+    # Application Insights creates a "Smart Detection" action group outside Terraform,
+    # which would otherwise block deleting the resource group on destroy. Everything in
+    # the group belongs to this environment, so let destroy remove it.
+    # (The provider's application_insights.disable_generated_rule waits for an alert rule
+    # that Azure no longer creates, and hangs the apply until its timeout.)
+    resource_group {
+      prevent_deletion_if_contains_resources = false
     }
   }
 
