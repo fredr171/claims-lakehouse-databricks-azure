@@ -1,0 +1,17 @@
+# Normalize line endings: store LF in the repo and check out LF on every OS
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Broken validation fixtures must stay byte-exact (BOMs, CRLF, latin-1, ragged rows)
+tests/fixtures/** -text -diff
+
+# Binary files: never diff or convert
+*.zip      binary
+*.parquet  binary
+*.pdf      binary
+*.png      binary
+*.jpg      binary

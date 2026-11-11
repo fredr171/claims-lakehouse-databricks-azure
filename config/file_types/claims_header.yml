@@ -1,0 +1,45 @@
+# CCLF1 Part A claim header: one row per claim version.
+# expected_columns: the header of CCLF1_YYYYMM.csv from synthetic-payer-files v1.0.0,
+# in order (tests/test_config.py checks them against a generated delivery).
+feed: cclf
+file_type: claims_header
+
+# Named groups year and month are required: they give the delivery month.
+file_name_regex: '^CCLF1_(?P<year>\d{4})(?P<month>0[1-9]|1[0-2])\.csv$'
+
+# Must be non-empty on every row (the payer's keys for the record).
+key_columns:
+  - CUR_CLM_UNIQ_ID
+  - BENE_MBI_ID
+
+expected_columns:
+  - CUR_CLM_UNIQ_ID
+  - PRVDR_OSCAR_NUM
+  - BENE_MBI_ID
+  - BENE_HIC_NUM
+  - CLM_TYPE_CD
+  - CLM_FROM_DT
+  - CLM_THRU_DT
+  - CLM_BILL_FAC_TYPE_CD
+  - CLM_BILL_CLSFCTN_CD
+  - PRNCPL_DGNS_CD
+  - ADMTG_DGNS_CD
+  - CLM_MDCR_NPMT_RSN_CD
+  - CLM_PMT_AMT
+  - CLM_NCH_PRMRY_PYR_CD
+  - PRVDR_FAC_FIPS_ST_CD
+  - BENE_PTNT_STUS_CD
+  - DGNS_DRG_CD
+  - CLM_OP_SRVC_TYPE_CD
+  - FAC_PRVDR_NPI_NUM
+  - ATNDG_PRVDR_NPI_NUM
+  - CLM_ADJSMT_TYPE_CD
+  - CLM_EFCTV_DT
+  - CLM_IDR_LD_DT
+  - CLM_ADMSN_TYPE_CD
+  - CLM_ADMSN_SRC_CD
+  - CLM_BILL_FREQ_CD
+  - DGNS_PRCDR_ICD_IND
+  - CLM_MDCR_INSTNL_TOT_CHRG_AMT
+  - CLM_CNTL_NUM
+  - CLM_ORG_CNTL_NUM

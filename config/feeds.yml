@@ -1,0 +1,15 @@
+# Feeds (data sources) and the file rules every delivered file is validated against.
+# Loaded by claims_lakehouse.config; see config/file_types/ for each file type.
+#
+# A feed's files land in the `landing` container at <prefix><file_type>/<file_name>.
+# Prefixes must not overlap. Onboarding a feed means an entry here plus its file types.
+feeds:
+  - name: cclf                     # CMS CCLF (Medicare fee-for-service)
+    prefix: cms/cclf/
+  - name: humana                   # Humana Medicare Advantage
+    prefix: humana/ma/
+
+# Defaults for every file type; a file type may override any of them under `rules:`.
+default_rules:
+  max_file_bytes: 536870912        # 512 MiB; generated files are 3-20 KB
+  encoding: utf-8                  # strict decode; a BOM is rejected separately

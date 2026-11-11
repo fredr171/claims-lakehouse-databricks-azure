@@ -1,0 +1,28 @@
+# CCLF4 Part A diagnosis codes: 1-6 rows per CCLF1 claim version.
+# expected_columns: the header of CCLF4_YYYYMM.csv from synthetic-payer-files v1.0.0,
+# in order (tests/test_config.py checks them against a generated delivery).
+feed: cclf
+file_type: claims_diagnosis
+
+# Named groups year and month are required: they give the delivery month.
+file_name_regex: '^CCLF4_(?P<year>\d{4})(?P<month>0[1-9]|1[0-2])\.csv$'
+
+# Must be non-empty on every row (the payer's keys for the record).
+key_columns:
+  - CUR_CLM_UNIQ_ID
+  - BENE_MBI_ID
+  - CLM_VAL_SQNC_NUM
+
+expected_columns:
+  - CUR_CLM_UNIQ_ID
+  - BENE_MBI_ID
+  - BENE_HIC_NUM
+  - CLM_TYPE_CD
+  - CLM_PROD_TYPE_CD
+  - CLM_VAL_SQNC_NUM
+  - CLM_DGNS_CD
+  - PRVDR_OSCAR_NUM
+  - CLM_FROM_DT
+  - CLM_THRU_DT
+  - CLM_POA_IND
+  - DGNS_PRCDR_ICD_IND

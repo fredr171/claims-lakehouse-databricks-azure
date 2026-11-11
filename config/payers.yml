@@ -1,0 +1,27 @@
+# Payer registry: the ONLY place gold learns about payers.
+#
+# Onboard: give the payer's feed its silver pipeline and conformed views (coverage spans
+#   and claim families, same columns and types for every payer), then add an entry here.
+#   The marts' SQL never changes.
+# Retire: set retired_month. Its history stays in every mart; it stops counting as
+#   current coverage and its member months end at its last delivery.
+# Offboard: remove the entry. The marts are rebuilt without it.
+#
+#   payer_id   stable key used in every mart (snake_case, never reused)
+#   feed       the feed in feeds.yml whose silver pipeline supplies the conformed views
+#   *_month    YYYY-MM
+#
+# payer_id values match the sibling repo (claims-lakehouse-dbt-duckdb) so marts compare 1:1.
+payers:
+  - payer_id: cms_ffs
+    payer_name: CMS Medicare Fee-for-Service
+    line_of_business: Medicare FFS
+    feed: cclf
+    onboarded_month: "2023-01"
+    retired_month: null
+  - payer_id: humana_ma
+    payer_name: Humana Medicare Advantage
+    line_of_business: Medicare Advantage
+    feed: humana
+    onboarded_month: "2023-01"
+    retired_month: null
