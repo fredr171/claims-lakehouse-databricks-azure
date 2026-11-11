@@ -13,8 +13,13 @@ from pyspark.sql import DataFrame
 
 from claims_lakehouse.silver.cclf.claim_families import claim_families, claim_versions
 from claims_lakehouse.silver.cclf.quality import ROW_EXPECTATIONS, UNIQUE_KEYS
-from claims_lakehouse.silver.cclf.staging import BENEFICIARY_TRACKED_COLUMNS, stage_file
+from claims_lakehouse.silver.cclf.staging import (
+    BENEFICIARY_DEMOGRAPHICS,
+    BENEFICIARY_TRACKED_COLUMNS,
+    stage_file,
+)
 from claims_lakehouse.silver.deliveries import current_rows, delivery_index
+from claims_lakehouse.silver.masks import protected_names
 from claims_lakehouse.silver.member_history import member_versions
 from claims_lakehouse.silver.quality import KEYS_UNIQUE, duplicate_key_check
 from claims_lakehouse.silver.spec import (
@@ -41,6 +46,9 @@ MEMBER_HISTORY = MemberHistory(
     tracked=tuple(BENEFICIARY_TRACKED_COLUMNS),
     coverage_end="coverage_end_date",
 )
+
+# Names, addresses and birth dates (delivered and staged names): masked in Unity Catalog.
+PROTECTED_COLUMNS = protected_names(BENEFICIARY_DEMOGRAPHICS)
 
 
 def _per_file_type(file_type: str) -> list[SilverTable]:

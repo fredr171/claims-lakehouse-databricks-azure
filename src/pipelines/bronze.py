@@ -6,8 +6,12 @@ as a new file. Every column is read as a string; lineage comes from _metadata. T
 options, schema and lineage expression are the ones the local tests use
 (claims_lakehouse.bronze.lineage).
 
+The member files' names, addresses and birth dates are declared with Unity Catalog column
+masks (claims_lakehouse.silver.masks), so the table's schema is given in full for them.
+
 Pipeline configuration:
     claims_lakehouse.archive_url   abfss://archive@<account>.dfs.core.windows.net/
+    claims_lakehouse.catalog       the Unity Catalog catalog (holds the mask functions)
 """
 
 from pyspark import pipelines as dp
@@ -20,9 +24,17 @@ from claims_lakehouse.bronze.lineage import (
     with_lineage,
 )
 from claims_lakehouse.config import FileType, load_config
+from claims_lakehouse.silver.cclf import tables as cclf_tables
+from claims_lakehouse.silver.humana import tables as humana_tables
+from claims_lakehouse.silver.masks import empty_bronze, masked_schema
 
 ARCHIVE_URL = spark.conf.get("claims_lakehouse.archive_url")  # noqa: F821 (pipeline global)
+CATALOG = spark.conf.get("claims_lakehouse.catalog")  # noqa: F821
 CONFIG = load_config()
+PROTECTED = {
+    module.MEMBER_HISTORY.file_type: module.PROTECTED_COLUMNS
+    for module in (cclf_tables, humana_tables)
+}
 
 # A path outside the archive layout has no month or checksum: never load it.
 LINEAGE_EXPECTATIONS = {
@@ -33,11 +45,14 @@ LINEAGE_EXPECTATIONS = {
 
 def define_bronze_table(file_type: FileType) -> None:
     source = f"{ARCHIVE_URL}{file_type.feed.prefix}{file_type.file_type}/"
+    protected = PROTECTED.get(file_type.file_type, frozenset())
+    schema = masked_schema(empty_bronze(spark, file_type).schema, protected, CATALOG)  # noqa: F821
 
     @dp.table(
         name=bronze_table_name(file_type),
         comment=f"Every validated delivery of {file_type.file_type} ({file_type.feed.name}), "
         "as delivered text, append-only",
+        schema=schema,
     )
     @dp.expect_all_or_fail(LINEAGE_EXPECTATIONS)
     def bronze():

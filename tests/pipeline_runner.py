@@ -40,12 +40,13 @@ class Dataset:
     kind: str  # materialized_view | temporary_view | table
     function: object
     expectations: dict[str, dict[str, str]] = field(default_factory=dict)  # action -> rules
+    schema: str | None = None  # the declared schema DDL (column masks), if any
 
 
 @dataclass
 class Definitions:
     datasets: list[Dataset] = field(default_factory=list)
-    streaming_tables: list[str] = field(default_factory=list)
+    streaming_tables: dict[str, str | None] = field(default_factory=dict)  # name -> schema
     flows: list[dict] = field(default_factory=list)
 
 
@@ -63,11 +64,11 @@ def _stand_in(defs: Definitions) -> types.ModuleType:
         return factory
 
     def dataset(kind):
-        def factory(name=None, comment=None, **_):
+        def factory(name=None, comment=None, schema=None, **_):
             def decorate(function):
                 defs.datasets.append(
                     Dataset(name or function.__name__, kind, function,
-                            function.__dict__.get("_expectations", {}))
+                            function.__dict__.get("_expectations", {}), schema)
                 )  # fmt: skip
                 return function
 
@@ -81,7 +82,9 @@ def _stand_in(defs: Definitions) -> types.ModuleType:
     dp.expect_all = expect("warn")
     dp.expect_all_or_drop = expect("drop")
     dp.expect_all_or_fail = expect("fail")
-    dp.create_streaming_table = lambda name, **_: defs.streaming_tables.append(name)
+    dp.create_streaming_table = lambda name, schema=None, **_: defs.streaming_tables.update(
+        {name: schema}
+    )
     dp.create_auto_cdc_flow = lambda **kwargs: defs.flows.append(kwargs)
     return dp
 
@@ -105,6 +108,9 @@ class _Spark:
 
     def sql(self, query: str) -> DataFrame:
         return self._spark.sql(query)
+
+    def createDataFrame(self, *args, **kwargs) -> DataFrame:  # noqa: N802 (Spark's name)
+        return self._spark.createDataFrame(*args, **kwargs)
 
 
 def load_pipeline(spark: SparkSession, file_name: str, conf: dict[str, str]) -> Definitions:

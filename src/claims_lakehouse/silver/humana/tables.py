@@ -15,7 +15,12 @@ from claims_lakehouse.silver.deliveries import current_rows, delivery_index
 from claims_lakehouse.silver.humana.amount_rules import amount_problem
 from claims_lakehouse.silver.humana.claim_families import claim_families, claim_versions
 from claims_lakehouse.silver.humana.quality import ROW_EXPECTATIONS, UNIQUE_KEYS
-from claims_lakehouse.silver.humana.staging import MEMBER_TRACKED_COLUMNS, stage_file
+from claims_lakehouse.silver.humana.staging import (
+    MEMBER_ELIGIBILITY,
+    MEMBER_TRACKED_COLUMNS,
+    stage_file,
+)
+from claims_lakehouse.silver.masks import protected_names
 from claims_lakehouse.silver.member_history import member_versions
 from claims_lakehouse.silver.quality import (
     KEYS_UNIQUE,
@@ -42,6 +47,9 @@ MEMBER_HISTORY = MemberHistory(
     tracked=tuple(MEMBER_TRACKED_COLUMNS),
     coverage_end="enrollment_end_date",
 )
+
+# Names, addresses and birth dates (delivered and staged names): masked in Unity Catalog.
+PROTECTED_COLUMNS = protected_names(MEMBER_ELIGIBILITY)
 
 
 def _per_file_type(file_type: str) -> list[SilverTable]:

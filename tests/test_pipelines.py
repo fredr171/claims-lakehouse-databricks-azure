@@ -18,6 +18,7 @@ from claims_lakehouse.gold.build import build_conformed
 from claims_lakehouse.jobs.supersession import needs_full_refresh, superseded_deliveries
 from claims_lakehouse.silver.cclf import tables as cclf_tables
 from claims_lakehouse.silver.humana import tables as humana_tables
+from claims_lakehouse.silver.masks import PROTECTED, mask_function_statements, masked_schema
 from claims_lakehouse.silver.member_history import SEQUENCE_COLUMNS
 from claims_lakehouse.silver.quality import Action
 
@@ -138,3 +139,95 @@ def test_without_the_gate_nothing_is_published(spark, payer):
     assert gate_inputs <= set(ungated)
     for name, df in built.items():  # restore for the other tests
         df.createOrReplaceTempView(name)
+
+
+# --- Column masks ---------------------------------------------------------------------------
+
+EXPECTED_MASKED = {
+    "cclf": {"beneficiary_demographics_current", "stg_beneficiary_demographics",
+             "beneficiary_versions", "beneficiary_versions_history"},
+    "humana": {"member_eligibility_current", "stg_member_eligibility",
+               "member_versions", "member_versions_history"},
+}  # fmt: skip
+
+
+def declared_schemas(defs):
+    return {d.name: d.schema for d in defs.datasets} | dict(defs.streaming_tables)
+
+
+def test_exactly_the_tables_holding_member_pii_declare_masks(payer):
+    feed, defs, _, _ = payer
+    masked = {name for name, ddl in declared_schemas(defs).items() if ddl and "MASK" in ddl}
+    assert masked == EXPECTED_MASKED[feed]
+
+
+def test_each_declared_schema_is_the_built_table_with_masks(payer):
+    """The declared schema is derived from empty inputs; it must be exactly the schema of
+    the table built from real data, or Databricks would reject the update."""
+    feed, defs, built, _ = payer
+    protected = TABLES[feed].PROTECTED_COLUMNS
+    for name, ddl in declared_schemas(defs).items():
+        if ddl is not None:
+            assert ddl == masked_schema(built[name].schema, protected, CATALOG), name
+
+
+def test_every_protected_column_is_masked_with_its_type(payer):
+    feed, defs, _, _ = payer
+    stg = declared_schemas(defs)[f"stg_{TABLES[feed].MEMBER_HISTORY.file_type}"]
+    columns = dict(part.split(" ", 1) for part in stg.split(", "))
+    for name in PROTECTED:
+        if f"`{name}`" in columns:
+            fn = "mask_pii_date" if name == "birth_date" else "mask_pii_string"
+            assert columns[f"`{name}`"].endswith(f"MASK {CATALOG}.ops.{fn}"), name
+    unmasked = [c for c, d in columns.items() if "MASK" not in d]
+    assert "`beneficiary_mbi`" in unmasked  # identifiers are not masked
+
+
+def test_bronze_masks_the_delivered_member_columns(spark, config, archive):
+    defs = load_pipeline(
+        spark,
+        "bronze.py",
+        {"claims_lakehouse.archive_url": "abfss://archive@x/", "claims_lakehouse.catalog": CATALOG},
+    )
+    schemas = {d.name: d.schema for d in defs.datasets}
+    for file_type in config.file_types.values():
+        name = bronze_table_name(file_type)
+        module = next((m for m in TABLES.values() if m.MEMBER_HISTORY.file_type ==
+                       file_type.file_type), None)  # fmt: skip
+        if module is None:
+            assert schemas[name] is None, name
+            continue
+        actual = archive.bronze(spark, file_type.file_type).schema
+        assert schemas[name] == masked_schema(actual, module.PROTECTED_COLUMNS, CATALOG)
+        assert "MASK" in schemas[name]
+
+
+def test_the_mask_functions_cover_text_and_dates():
+    statements = mask_function_statements(CATALOG, "pii_readers")
+    assert [s.split("(")[0] for s in statements] == [
+        f"CREATE OR REPLACE FUNCTION {CATALOG}.ops.mask_pii_string",
+        f"CREATE OR REPLACE FUNCTION {CATALOG}.ops.mask_pii_date",
+    ]
+    assert all("is_member('pii_readers')" in s for s in statements)
+
+
+# Written out by hand, independently of masks.PROTECTED: what must never be readable.
+MUST_BE_MASKED = {
+    "cclf": {"first_name", "middle_name", "last_name", "address_line_1", "city", "zip5_code",
+             "zip9_code", "birth_date", "BENE_1ST_NAME", "BENE_MIDL_NAME", "BENE_LAST_NAME",
+             "BENE_LINE_1_ADR", "GEO_ZIP_PLC_NAME", "GEO_ZIP5_CD", "BENE_ZIP_CD", "BENE_DOB"},
+    "humana": {"first_name", "middle_initial", "last_name", "address_line_1", "city",
+               "zip5_code", "birth_date", "FIRST_NAME", "MIDDLE_INITIAL", "LAST_NAME",
+               "ADDRESS_LINE_1", "CITY", "ZIP", "DOB"},
+}  # fmt: skip
+
+
+def test_the_masked_columns_are_exactly_the_members_pii(payer):
+    feed, defs, _, _ = payer
+    masked = set()
+    for ddl in declared_schemas(defs).values():
+        for part in (ddl or "").split(", "):
+            if " MASK " in part:
+                masked.add(part.split("`")[1])
+    # staged names (staging, history) and delivered names (*_current); nothing else
+    assert masked == MUST_BE_MASKED[feed]

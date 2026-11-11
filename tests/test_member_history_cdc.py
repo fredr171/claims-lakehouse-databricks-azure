@@ -79,7 +79,7 @@ def rows(df):
 def test_converted_auto_cdc_history_equals_the_batch_reference(spark, staged):
     expected = member_versions(staged, KEY, TRACKED, END)
     actual = versions_from_history(history_frame(spark, staged), KEY, TRACKED, END)
-    assert actual.columns == expected.columns
+    assert actual.dtypes == expected.dtypes  # names and types: the pipeline declares them
     assert rows(actual) == rows(expected)
 
 

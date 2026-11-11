@@ -122,7 +122,7 @@ def versions_from_history(
     )
     return history.select(
         key,
-        F.row_number().over(by_version).alias("version_number"),
+        F.row_number().over(by_version).cast("long").alias("version_number"),  # as in batch
         start.getField("_delivery_month").alias("valid_from"),
         F.col("__END_AT").getField("_delivery_month").alias("valid_to"),
         F.col("__END_AT").isNull().alias("is_current"),

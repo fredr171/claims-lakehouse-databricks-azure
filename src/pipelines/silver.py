@@ -15,6 +15,10 @@ delivery month then archive time. A corrected re-send cannot be retracted increm
 so the job runs a full refresh of this pipeline when a re-send supersedes a member file
 (jobs/prepare_payer.py, using <history>_superseded below).
 
+Column masks: a table that holds members' names, addresses or birth dates declares its full
+schema with a MASK on each (claims_lakehouse.silver.masks). The schemas come from the same
+build functions run on empty bronze, so they cannot drift from what the tables produce.
+
 Pipeline configuration:
     claims_lakehouse.feed      cclf | humana
     claims_lakehouse.catalog   the Unity Catalog catalog (bronze is <catalog>.bronze)
@@ -23,6 +27,7 @@ Pipeline configuration:
 from pyspark import pipelines as dp
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
+from pyspark.sql.types import StructType
 
 from claims_lakehouse.bronze.lineage import bronze_table_name
 from claims_lakehouse.config import load_config
@@ -31,7 +36,12 @@ from claims_lakehouse.gold.marts import read_sql, render
 from claims_lakehouse.silver.cclf import tables as cclf_tables
 from claims_lakehouse.silver.deliveries import FILE_KEY
 from claims_lakehouse.silver.humana import tables as humana_tables
-from claims_lakehouse.silver.member_history import history_source, versions_from_history
+from claims_lakehouse.silver.masks import empty_bronze, masked_schema, table_schemas
+from claims_lakehouse.silver.member_history import (
+    SEQUENCE_COLUMNS,
+    history_source,
+    versions_from_history,
+)
 from claims_lakehouse.silver.quality import Action
 from claims_lakehouse.silver.spec import SilverTable, bronze_file_type
 
@@ -47,6 +57,29 @@ GATE_KEY = "__gate_key"
 HISTORY_TABLE = f"{HISTORY.table}_history"  # the AUTO CDC target
 HISTORY_SOURCE = f"{HISTORY.table}_source"
 SUPERSEDED = f"{HISTORY.table}_superseded"
+EXCEPT_COLUMNS = ["_archived_at"]  # sequencing only; not stored in the history table
+stage_member_file = next(t for t in TABLES_MODULE.TABLES if t.name == HISTORY.source).build
+
+EMPTY_BRONZE = {
+    ft: empty_bronze(spark, CONFIG.file_types[ft])  # noqa: F821
+    for ft in TABLES_MODULE.FILE_TYPES
+}
+SCHEMAS = table_schemas(TABLES_MODULE.TABLES, EMPTY_BRONZE)
+
+
+def schema(table_schema: StructType) -> str | None:
+    return masked_schema(table_schema, TABLES_MODULE.PROTECTED_COLUMNS, CATALOG)
+
+
+def history_table_schema() -> StructType:
+    """AUTO CDC's SCD2 target: the source's columns (except EXCEPT_COLUMNS), then
+    __START_AT and __END_AT, structs of the sequence columns."""
+    source = history_source(
+        stage_member_file(EMPTY_BRONZE[HISTORY.file_type]), HISTORY.key, HISTORY.tracked
+    ).schema
+    sequence = StructType([source[c] for c in SEQUENCE_COLUMNS])
+    stored = StructType([f for f in source.fields if f.name not in EXCEPT_COLUMNS])
+    return stored.add("__START_AT", sequence).add("__END_AT", sequence)
 
 
 def bronze_table(file_type: str) -> str:
@@ -85,9 +118,9 @@ def define_table(table: SilverTable) -> None:
         df = table.build(*[read(name) for name in table.inputs])
         return gated(df) if table.published else df
 
-    dp.materialized_view(name=table.name, comment=f"{PAYER.payer_id} silver")(
-        with_expectations(table, build)
-    )
+    dp.materialized_view(
+        name=table.name, comment=f"{PAYER.payer_id} silver", schema=schema(SCHEMAS[table.name])
+    )(with_expectations(table, build))
 
 
 for silver_table in TABLES_MODULE.TABLES:
@@ -106,8 +139,6 @@ def gate() -> DataFrame:
 
 # --- Member history: AUTO CDC from current deliveries --------------------------------------
 
-stage_member_file = next(t for t in TABLES_MODULE.TABLES if t.name == HISTORY.source).build
-
 
 @dp.temporary_view(name=HISTORY_SOURCE)
 def history_rows() -> DataFrame:
@@ -120,19 +151,27 @@ def history_rows() -> DataFrame:
     return gated(history_source(stage_member_file(rows), HISTORY.key, HISTORY.tracked))
 
 
-dp.create_streaming_table(name=HISTORY_TABLE, comment=f"{PAYER.payer_id} member history (SCD2)")
+dp.create_streaming_table(
+    name=HISTORY_TABLE,
+    comment=f"{PAYER.payer_id} member history (SCD2)",
+    schema=schema(history_table_schema()),
+)
 dp.create_auto_cdc_flow(
     target=HISTORY_TABLE,
     source=HISTORY_SOURCE,
     keys=[HISTORY.key],
-    sequence_by=F.struct("_delivery_month", "_archived_at"),
-    except_column_list=["_archived_at"],
+    sequence_by=F.struct(*SEQUENCE_COLUMNS),
+    except_column_list=EXCEPT_COLUMNS,
     stored_as_scd_type=2,
     track_history_column_list=list(HISTORY.tracked),
 )
 
 
-@dp.materialized_view(name=HISTORY.table, comment=f"{PAYER.payer_id} member versions")
+@dp.materialized_view(
+    name=HISTORY.table,
+    comment=f"{PAYER.payer_id} member versions",
+    schema=schema(SCHEMAS[HISTORY.table]),
+)
 def member_versions() -> DataFrame:
     history = read(HISTORY_TABLE)
     return gated(versions_from_history(history, HISTORY.key, HISTORY.tracked, HISTORY.coverage_end))
