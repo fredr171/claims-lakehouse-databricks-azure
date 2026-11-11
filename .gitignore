@@ -241,3 +241,8 @@ crash.log
 
 # Azure Functions local settings (hold connection strings)
 local.settings.json
+
+# Terraform working files (the lock file is committed)
+.terraform/
+backend.hcl
+*tfplan

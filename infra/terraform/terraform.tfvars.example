@@ -1,0 +1,5 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+# The subscription is not set here: export ARM_SUBSCRIPTION_ID instead.
+
+# 3-7 lowercase letters or digits; the same value you passed to bootstrap-state.ps1.
+suffix = "abc12"

@@ -2,7 +2,7 @@
 
 An event-driven claims lakehouse on Azure and Databricks. It ingests monthly healthcare claims
 deliveries from two payers, CMS CCLF (Medicare fee-for-service) and Humana Medicare Advantage,
-through a medallion architecture: landing → bronze → silver → gold.
+through a medallion architecture: landing Ã¢â€ â€™ bronze Ã¢â€ â€™ silver Ã¢â€ â€™ gold.
 
 It is the sibling of [claims-lakehouse-dbt-duckdb](https://github.com/fredr171/claims-lakehouse-dbt-duckdb)
 (AWS, Lambda, dbt-duckdb). Both use the same synthetic data from
@@ -11,10 +11,16 @@ its **answer keys** (the exact results a correct pipeline produces) exactly. The
 decisions are the same; the stack is platform-native. Where this repo differs, the reason is
 below. All data is synthetic.
 
-> **Status:** phase 1 (local foundation) is done: config, file validation, silver and gold
-> logic, and tests against both answer keys, all running locally on PySpark. Azure
-> infrastructure (phase 2), Databricks pipelines and jobs (phase 3), and the notifier, CI
-> and dashboard (phase 4) come next.
+> **Status:** phases 1 and 2 are done.
+> - **Phase 1:** config, file validation, silver and gold logic, and tests against both
+>   answer keys, all running locally on PySpark.
+> - **Phase 2:** Terraform for storage, Event Grid, the validation Function, Key Vault and
+>   the Databricks workspace. Verified live: a valid file is archived, a broken one is
+>   quarantined with its report, a repeat is a duplicate, and the archive refuses deletes.
+>   `infra/teardown.ps1` removes all of it.
+>
+> Databricks pipelines and jobs (phase 3), and the notifier, CI and dashboard (phase 4)
+> come next.
 
 **Stack:** Python 3.12, PySpark 4 (Databricks serverless), Lakeflow Declarative Pipelines,
 Auto Loader, Unity Catalog, Azure Functions, Event Grid, ADLS Gen2, Terraform, Databricks
@@ -25,7 +31,7 @@ Asset Bundles, pytest, ruff.
 ```mermaid
 flowchart LR
     payer["Payer CSV<br/>monthly delivery"] --> landing[("landing<br/>ADLS Gen2")]
-    landing --> eg["Event Grid"] --> fn["Validation Function<br/>file-level checks"]
+    landing --> eg["Event Grid"] --> q[["landing-events queue"]] --> fn["Validation Function<br/>file-level checks"]
     fn -->|valid| archive[("archive<br/>checksum-keyed, immutable")]
     fn -->|invalid| quarantine[("quarantine<br/>+ error report")]
     archive --> al["Auto Loader<br/>(file-arrival job)"] --> bronze[("bronze<br/>Delta, all strings")]
@@ -48,7 +54,7 @@ flowchart LR
 
 ## Key decisions, layer by layer
 
-### 1. Validation (landing → archive): whole files, before Auto Loader
+### 1. Validation (landing Ã¢â€ â€™ archive): whole files, before Auto Loader
 - Auto Loader is row-oriented and cannot reject a whole file, so a **Python Azure Function
   validates every file first** and Auto Loader only ever sees the archive. Checks, from one
   YAML file per file type: landing path, known file type, file name, size, no BOM, encoding,
@@ -66,6 +72,23 @@ flowchart LR
   file (same checksum) is skipped. **Checksum-keyed paths are needed for correctness:** Auto
   Loader never reprocesses a path it has seen, so a corrected re-send under the same name
   would otherwise be silently dropped.
+- **Handling is idempotent**, because Event Grid delivers at least once
+  (`src/claims_lakehouse/validation/landing.py`).
+  - **Archiving never overwrites.** The archive write is a single create-if-absent call,
+    so a repeated event is recorded as a duplicate.
+  - **Quarantine writes are repeatable.** They overwrite, so a retried rejection rewrites
+    the same file and report.
+  - **The file read must match the event.** It must still have the event's ETag. If a payer
+    replaced the file in landing first, the newer upload has its own event.
+
+  The Function in `functions/validation/` is only a queue trigger around this handler and
+  an Azure SDK implementation of its storage interface.
+- **The archive is write-once.** A container-level time-based immutability (WORM) policy stops
+  any archived delivery from being overwritten or deleted during retention, so the archive,
+  not bronze, is the audit record. The lake has a hierarchical namespace, which Unity Catalog
+  requires and which rules out blob versioning, so container-level WORM is the protection
+  available. The policy is left unlocked so the dev environment can be torn down; production
+  would lock it.
 
 ### 2. Bronze: every delivery, as delivered
 - All columns are strings (codes keep their leading zeros), plus lineage: feed, file type,
@@ -93,8 +116,8 @@ flowchart LR
   table against the same keys.
 - **Claim families and net paid:** status comes from which versions are present (CCLF) or
   still active, meaning not reversed (Humana), never from file order. CCLF: any cancellation
-  → cancelled, else the latest adjustment by claim load date. Humana: an active replacement
-  → replaced, else an active original (paid or denied), else voided.
+  Ã¢â€ â€™ cancelled, else the latest adjustment by claim load date. Humana: an active replacement
+  Ã¢â€ â€™ replaced, else an active original (paid or denied), else voided.
   **Differs from the sibling:** Humana net paid uses the same status rule as CCLF rather than
   a sum of every version. They agree whenever history is complete (a test checks this). They
   differ only for a reversal whose original never arrived, which nets to 0 instead of a
@@ -153,7 +176,7 @@ its claim voided. Every result equals a clean load of the corrected files.
   Each payer supplies three **conformed views** in SQL: coverage spans, claim families, and
   current deliveries for its delivery window. They have identical columns and types,
   enforced by a contract check. Code mappings such as sex `1`/`2` vs `M`/`F`, `CANCELLED`
-  vs `VOIDED`, and `REPLACED` → `ADJUSTED` happen there, never in a mart.
+  vs `VOIDED`, and `REPLACED` Ã¢â€ â€™ `ADJUSTED` happen there, never in a mart.
 - Mart SQL names its inputs with `${...}` placeholders that a thin renderer fills from the
   registry (where the sibling uses dbt macros), so the same SQL runs locally and on Databricks.
 - **Payer lifecycle:**
@@ -163,6 +186,39 @@ its claim voided. Every result equals a clean load of the corrected files.
   - **Offboard:** remove the entry. The payer drops out of every mart.
 - No names, addresses or full birth dates in gold. In silver they will be protected with
   Unity Catalog column masks.
+
+### 5. Infrastructure: Terraform, keyless, torn down between runs
+- **Terraform** (`infra/terraform/`) owns everything, in Central US and tagged
+  `project = claims-lakehouse-azure`. Names are defined once in `locals.tf`. Remote state
+  lives in a separate account that `infra/bootstrap/bootstrap-state.ps1` creates, so
+  `terraform destroy` never touches it.
+- **Teardown is a script, not just `terraform destroy`.** With Unity Catalog enabled
+  automatically, Azure Databricks adds a workspace-catalog storage account and access
+  connector to the workspace's managed resource group, and leaves that group behind when
+  the workspace is deleted. `infra/teardown.ps1` runs `destroy`, then deletes the group
+  only if it is still marked as managed by this environment's (now deleted) workspace.
+- **No storage keys anywhere.** Both storage accounts disable shared-key access, and the
+  Function, Event Grid and Databricks reach storage through managed identities with
+  narrow roles.
+- **Event Grid delivers to a storage queue, not straight to the Function.** The subscription
+  can then be created before any Function code exists, events wait while the Function is
+  redeployed, and failed deliveries go to a dead-letter container. On an ADLS Gen2 account
+  a file is created empty and then flushed, so the subscription passes only the calls that
+  finish a file (`FlushWithClose`, `PutBlob`, `PutBlockList`, `CopyBlob`).
+- **The validation Function runs on Flex Consumption** (Python 3.12), billed per execution.
+  The app is defined with the `azapi` provider: azurerm's Flex Consumption resource always
+  adds a key-based `AzureWebJobsStorage` connection string
+  ([hashicorp/terraform-provider-azurerm#29149](https://github.com/hashicorp/terraform-provider-azurerm/issues/29149)),
+  which a keyless storage account rejects.
+- **Kept inside a ~$25/month budget:**
+  - **Serverless compute** for jobs, pipelines and SQL.
+  - **No NAT gateway in Databricks.** Classic clusters get public IPs (with no inbound ports
+    open) rather than the NAT gateway that secure cluster connectivity would add on the
+    default network, which alone would cost more than the budget. Production would use VNet
+    injection.
+  - **A daily cap on Log Analytics.**
+  - **Key Vault without purge protection,** so the environment can be destroyed and
+    rebuilt under the same names.
 
 ## Testing
 
@@ -211,3 +267,28 @@ py -3.12 -m venv .venv
 ```
 
 Set `JAVA_HOME` to the JDK 17 folder if `java` is not on `PATH`.
+
+### Infrastructure
+
+Requires Terraform 1.9+ and the Azure CLI, signed in with `az login`. Choose a suffix of 3Ã¢â‚¬â€œ7
+lowercase letters or digits; it makes the storage and Key Vault names globally unique.
+
+```powershell
+./infra/bootstrap/bootstrap-state.ps1 -Suffix <suffix>   # once: remote-state account
+Copy-Item infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars  # set suffix
+$env:ARM_SUBSCRIPTION_ID = az account show --query id -o tsv
+cd infra/terraform
+terraform init "-backend-config=backend.hcl"
+terraform plan
+terraform apply      # creates billable resources
+cd ../..; ./infra/teardown.ps1   # between live runs: destroy, plus the Databricks leftovers
+```
+
+Deploy the validation Function after `apply` (dependencies install in a remote build):
+
+```powershell
+./functions/validation/build.ps1
+$fn = terraform -chdir=infra/terraform output -raw validation_function_name
+az functionapp deployment source config-zip -g rg-claims-lakehouse-dev -n $fn `
+    --src build/validation.zip --build-remote true
+```

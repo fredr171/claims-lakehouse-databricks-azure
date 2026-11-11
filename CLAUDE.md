@@ -45,7 +45,8 @@ and the README should be clean and easy to follow.
 - Compute quota is small (10 regional vCPUs, DSv3 family only). **Use serverless compute by
   default** for jobs, pipelines and SQL. When classic compute is unavoidable, use
   `Standard_DS3_v2`, single-node or one worker, with auto-termination.
-- Infrastructure is torn down between live runs. `terraform destroy` must always work cleanly.
+- Infrastructure is torn down between live runs with `infra/teardown.ps1` (`terraform destroy`
+  plus the Databricks managed resource group Azure leaves behind). It must always work cleanly.
 
 ## Architecture
 
@@ -58,7 +59,8 @@ and the README should be clean and easy to follow.
 | Silver | Delta tables / views (Lakeflow Declarative Pipelines) | Typed, renamed, current deliveries; member history (SCD2); claim families with net paid |
 | Gold | Delta tables (Unity Catalog) | Payer-agnostic marts |
 
-Flow: a file lands in `landing` → Event Grid → **validation Azure Function** → valid files are
+Flow: a file lands in `landing` → Event Grid → storage queue → **validation Azure Function**
+(Flex Consumption, queue trigger) → valid files are
 copied to `archive`, invalid files go to `quarantine` → a Lakeflow Job (file-arrival trigger on
 the archive) runs Auto Loader into bronze, then the per-payer pipelines, then the answer-key
 check → job outcomes go to the **notifier Azure Function** → GitHub issues.
@@ -77,8 +79,12 @@ check → job outcomes go to the **notifier Azure Function** → GitHub issues.
 - **Checksum-keyed paths are required for correctness**, not just tidiness: Auto Loader tracks
   files by path and does not reprocess a path it has seen, so a corrected re-send under the
   same name would otherwise be silently skipped.
-- The archive container uses blob versioning and an immutability policy. **The archive files are
-  the immutable record**; bronze Delta tables are a queryable copy, not the audit trail.
+- The archive container has a **container-level time-based immutability (WORM) policy**. The lake
+  is hierarchical-namespace (Unity Catalog needs it), and those accounts support neither blob
+  versioning nor version-level WORM. The policy stays unlocked so `terraform destroy` works;
+  production would lock it. Nothing may rename, move or delete archive files (no Auto Loader
+  `cleanSource`). **The archive files are the immutable record**; bronze Delta tables are a
+  queryable copy, not the audit trail.
 
 ### Bronze
 - Auto Loader reads the archive with every column as a string (codes keep leading zeros) and
