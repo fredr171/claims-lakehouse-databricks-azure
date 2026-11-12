@@ -19,6 +19,7 @@ locals {
     catalog             = "claims_lakehouse_${var.environment}"
     runner              = "${local.project}-runner-${var.environment}"
     pii_readers         = "${local.project}-pii-readers-${var.environment}"
+    analysts            = "${local.project}-analysts-${var.environment}"
   }
 
   # Unity Catalog privileges of the runner (runner.tf).

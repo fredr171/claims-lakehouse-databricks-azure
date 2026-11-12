@@ -21,6 +21,17 @@ resource "databricks_group_member" "runner_reads_pii" {
   member_id = databricks_service_principal.runner.id
 }
 
+# Analysts read bronze, silver and gold but are not PII readers, so they see masked names,
+# addresses and birth dates. The deployer joins it, which is how the masks are checked.
+resource "databricks_group" "analysts" {
+  display_name = local.names.analysts
+}
+
+resource "databricks_group_member" "deployer_analyst" {
+  group_id  = databricks_group.analysts.id
+  member_id = data.databricks_current_user.deployer.id
+}
+
 resource "databricks_grants" "catalog" {
   catalog = databricks_catalog.main.name
 
@@ -28,10 +39,15 @@ resource "databricks_grants" "catalog" {
     principal  = databricks_service_principal.runner.application_id
     privileges = ["USE_CATALOG"]
   }
+
+  grant {
+    principal  = databricks_group.analysts.display_name
+    privileges = ["USE_CATALOG"]
+  }
 }
 
-# Data schemas: the runner creates and refreshes the tables. ops: the mask functions and
-# the answer keys.
+# Data schemas: the runner creates and refreshes the tables, analysts read them. ops: the
+# mask functions and the answer keys (runner only).
 resource "databricks_grants" "schemas" {
   for_each = local.schemas
 
@@ -40,6 +56,14 @@ resource "databricks_grants" "schemas" {
   grant {
     principal  = databricks_service_principal.runner.application_id
     privileges = each.key == "ops" ? local.runner_privileges.ops : local.runner_privileges.data
+  }
+
+  dynamic "grant" {
+    for_each = each.key == "ops" ? [] : [databricks_group.analysts.display_name]
+    content {
+      principal  = grant.value
+      privileges = ["USE_SCHEMA", "SELECT"]
+    }
   }
 }
 
