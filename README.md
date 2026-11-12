@@ -488,8 +488,10 @@ az keyvault secret set --vault-name $kv -n $name --value ([pscredential]::new('x
 ### Deploying from GitHub
 
 After `terraform apply`, the `deploy` workflow can replace the manual Function and bundle
-deploys. Create a `dev` environment in the repository settings and set its variables from
-Terraform (none are secrets; none are committed):
+deploys. Create a `dev` environment in the repository settings, then set its variables
+from Terraform with `./infra/set-github-vars.ps1` (none are secrets; none are committed).
+Run it after every apply: a fresh environment has a new deploy app, workspace and runner.
+The variables it sets:
 
 | Variable | Value |
 |---|---|
