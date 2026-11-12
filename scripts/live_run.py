@@ -4,11 +4,14 @@
     python scripts/live_run.py keys                      # answer keys -> the ops volume
     python scripts/live_run.py deliver 2023-01 2023-12   # those months -> landing
     python scripts/live_run.py resend beneficiary_demographics 2023-02
+    python scripts/live_run.py break claims_header 2024-03   # a stop, for the notifier
 
 Files go to the landing container exactly as a payer would send them; the validation
 Function archives them and the archive's file-arrival trigger starts the job. `resend`
 re-sends a delivered file with its rows in another order: a new checksum (so a corrected
 re-send supersedes the original) with the same records, so the answer keys still hold.
+`break` sends a file with its first row duplicated: it passes file validation but fails the
+payer's keys_unique stop expectation. A `resend` of the same file afterwards recovers it.
 
 Needs the Azure CLI (signed in; the deployer has Storage Blob Data Contributor on the lake)
 and the Databricks CLI (DATABRICKS_HOST set). Names come from `terraform output`.
@@ -108,12 +111,15 @@ def deliver(first: str, last: str) -> None:
     upload(files)
 
 
-def resend(file_type: str, month: str) -> None:
+def send_modified(file_type: str, month: str, broken: bool) -> None:
     ft = load_config().file_types[file_type]
     folder = OUTPUT / GENERATED_DIRS[ft.feed.name] / month
     [original] = [p for p in folder.glob("*.csv") if ft.delivery_month(p.name) == month]
     header, *rows = original.read_text(encoding="utf-8").splitlines(keepends=True)
-    random.Random(month).shuffle(rows)
+    if broken:
+        rows.insert(1, rows[0])  # a duplicate key
+    else:
+        random.Random(month).shuffle(rows)
     with tempfile.TemporaryDirectory() as tmp:
         corrected = Path(tmp) / original.name
         corrected.write_text(header + "".join(rows), encoding="utf-8", newline="")
@@ -128,14 +134,15 @@ def main() -> None:
     d = commands.add_parser("deliver")
     d.add_argument("first")
     d.add_argument("last")
-    r = commands.add_parser("resend")
-    r.add_argument("file_type")
-    r.add_argument("month")
+    for name in ("resend", "break"):
+        r = commands.add_parser(name)
+        r.add_argument("file_type")
+        r.add_argument("month")
     args = parser.parse_args()
     if args.command == "deliver":
         deliver(args.first, args.last)
-    elif args.command == "resend":
-        resend(args.file_type, args.month)
+    elif args.command in ("resend", "break"):
+        send_modified(args.file_type, args.month, broken=args.command == "break")
     else:
         {"generate": generate, "keys": keys}[args.command]()
 
