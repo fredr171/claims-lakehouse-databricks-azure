@@ -140,6 +140,10 @@ check → job outcomes go to the **notifier Azure Function** → GitHub issues.
 
 ### Orchestration
 - A Lakeflow Job with a file-arrival trigger, max one concurrent run per payer feed.
+- The trigger reads Unity Catalog file events from a **queue Terraform provides** (Event Grid
+  subscription on the archive container → lake storage queue). Not Databricks' automatic
+  mode: it needs Storage Account Contributor and did not finish provisioning on a lake with
+  shared-key access disabled.
 - Final job task: compare gold against the answer keys and fail the run on mismatch.
 
 ### Notifier

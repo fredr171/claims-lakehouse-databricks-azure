@@ -26,16 +26,20 @@ resource "databricks_external_location" "archive" {
   comment         = "Validated deliveries, checksum-keyed (written only by the validation Function)"
   force_destroy   = true
 
-  # The file-arrival trigger reads file events; Databricks provisions them with the access
-  # connector's roles (databricks.tf), so those must exist first.
+  # The file-arrival trigger reads file events from the queue Terraform provides
+  # (eventgrid.tf), so the subscription and the queue role must exist first.
   enable_file_events = true
   file_event_queue {
-    managed_aqs { # Databricks creates the Event Grid subscription and queue
+    provided_aqs {
+      queue_url       = azurerm_storage_queue.archive_events.url
       resource_group  = azurerm_resource_group.main.name
       subscription_id = data.azurerm_client_config.current.subscription_id
     }
   }
-  depends_on = [azurerm_role_assignment.access_connector_file_events]
+  depends_on = [
+    azurerm_eventgrid_system_topic_event_subscription.archive,
+    azurerm_role_assignment.access_connector_archive_queue,
+  ]
 }
 
 resource "databricks_external_location" "unity" {

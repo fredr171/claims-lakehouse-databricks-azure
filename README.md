@@ -244,13 +244,15 @@ in archive                              └─► prepare_humana ► full refres
 - **File-arrival trigger on the archive**, so the job sees only validated files. It waits
   for a quiet period before starting, so one month's files usually make one run. One run at
   a time.
-  **Open issue (first live run):** the trigger has not fired yet. Unity Catalog turns
-  **file events** on for new external locations, and the trigger then reads them instead of
-  listing the archive. The first setup failed (403 creating the queue) because the access
-  connector lacked the roles Databricks needs. Terraform now grants those roles and
-  declares the file events with a managed queue. Databricks accepted that, but the queue
-  stayed "being provisioned" for over 30 minutes and never appeared in Azure. The live
-  runs were started by hand; to be resolved in phase 4.
+  The trigger reads Unity Catalog **file events** on the archive rather than listing it.
+  **Terraform provides the queue** (`eventgrid.tf`): the lake's Event Grid system topic sends
+  the archive's blob events to a storage queue, and the access connector may only read that
+  one queue. In its automatic mode Databricks creates the subscription and queue itself,
+  which needs Storage Account Contributor on the lake. In the first live run that setup
+  failed with a storage `AuthorizationFailure` and then stayed "being provisioned"; the
+  likely cause is that it uses account keys, which this account disables. Providing the
+  queue removes both management roles and the dependency on keys. Databricks documents
+  provided queues but does not validate them, so the live run is the test.
 - **Gold runs even when a payer stopped** (`run_if: ALL_DONE`): the stopped payer's tables
   keep their last good update, and the run still ends failed.
 - **The last task compares gold with the answer keys** (`claims_lakehouse/checks/`) and

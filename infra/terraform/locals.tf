@@ -46,6 +46,9 @@ locals {
   landing_events_queue       = "landing-events"
   event_deadletter_container = "eventgrid-deadletter"
 
+  # In the lake account: archive events for Databricks file events.
+  archive_events_queue = "archive-events"
+
   tags = {
     project     = "claims-lakehouse-azure"
     environment = var.environment
