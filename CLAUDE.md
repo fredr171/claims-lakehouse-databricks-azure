@@ -6,16 +6,23 @@ Guidance for Claude Code in this repository. Read it fully before starting any t
 
 An event-driven claims lakehouse on Azure and Databricks, following a medallion architecture
 (landing → bronze → silver → gold). It processes monthly healthcare claims deliveries from two
-payers: CMS CCLF (Medicare fee-for-service) and Humana Medicare Advantage.
+payers: CMS CCLF (Medicare fee-for-service) and a fictional Medicare Advantage payer ("the MA
+payer").
 
 It is the sibling of `fredr171/claims-lakehouse-dbt-duckdb` (AWS, Lambda, dbt-duckdb). Both
 repos use the same synthetic data from `fredr171/synthetic-payer-files`, and both must produce
 the same results as that generator's **answer keys**. The goal is to show the same design
 decisions implemented with a different, platform-native stack. Where this repo differs from the
-sibling, it should be a deliberate choice, explained in the README.
+sibling, it should be a deliberate choice, explained in `docs/DESIGN.md`.
 
-This is a **public portfolio repo** viewed by potential employers. Code, commit history, tests
-and the README should be clean and easy to follow.
+This is a **public repo**. Code, commit history, tests and docs should be clean and easy to
+follow. Keep the README short: a summary, the architecture, the results and the key decisions.
+The full reasoning goes in `docs/DESIGN.md`, and commands go in `docs/SETUP.md`.
+
+**Never name a real payer or health plan brand in prose** (docs, comments, docstrings, issue
+text): the second payer is a fictional MA payer. The code identifiers `humana` and `humana_ma`
+(feed, payer ID, schemas, file patterns) follow the generator's file names, and are renamed
+here once `synthetic-payer-files` renames them.
 
 ## Hard rules
 
@@ -117,7 +124,7 @@ check → job outcomes go to the **notifier Azure Function** → GitHub issues.
   delivery that a corrected re-send replaced. This must be handled explicitly (for example,
   feeding AUTO CDC only from current deliveries and running a full refresh of the affected flow
   when a supersession occurs). The chosen approach must pass the answer-key re-send tests.
-  Document the decision in the README.
+  Document the decision in `docs/DESIGN.md`.
   **Decided:** AUTO CDC reads current deliveries only, and a job task full-refreshes the
   payer pipeline when bronze holds more superseded member-file deliveries than the pipeline
   last published (a pipeline task cannot full-refresh a single flow).
@@ -200,4 +207,5 @@ Finish and test each phase before starting the next. Stop and ask at the end of 
 - Match the Python version of the Databricks serverless environment for pipeline code; use ruff
   for linting and formatting.
 - Small, focused commits with clear messages.
-- Update the README and this file when a design decision changes.
+- Update `docs/DESIGN.md` (and the README if it is a key decision) and this file when a
+  design decision changes.
