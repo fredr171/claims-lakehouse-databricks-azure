@@ -1,4 +1,4 @@
-"""Humana quality: row expectations on each file's current rows, and its gate tables.
+"""MA payer quality: row expectations on each file's current rows, and its gate tables.
 
 Stop (FAIL) when a value would make silver wrong: the MBI (gold keys people by it),
 enrollment dates, the claim frequency, status and form codes, the link from a reversal or

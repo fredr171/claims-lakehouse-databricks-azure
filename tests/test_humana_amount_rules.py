@@ -1,4 +1,4 @@
-"""Humana line amount rules: every rule fails on a line deliberately broken to break it."""
+"""MA payer line amount rules: every rule fails on a line deliberately broken to break it."""
 
 from decimal import Decimal
 

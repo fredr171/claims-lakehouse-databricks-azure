@@ -1,4 +1,4 @@
-"""Humana claim families: an original claim plus its reversal and replacement.
+"""MA payer claim families: an original claim plus its reversal and replacement.
 
 HUM_MEDCLM is line-level, so lines roll up to claim versions first (claim_id plus
 CLAIM_FREQ_CD: a reversal reuses its original's claim_id). CLAIM_FREQ_CD:

@@ -1,7 +1,7 @@
-"""The Humana silver tables: what each reads, how it is built and the expectations it carries.
+"""The MA payer silver tables: what each reads, how it is built and the expectations it carries.
 
 TABLES is the one list both runtimes use (claims_lakehouse.silver.spec): the local tests
-call build(), and the Humana pipeline defines one table per entry.
+call build(), and the MA payer pipeline defines one table per entry.
 """
 
 from __future__ import annotations

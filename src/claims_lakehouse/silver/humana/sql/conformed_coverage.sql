@@ -1,4 +1,4 @@
--- Humana MA coverage in the conformed contract (claims_lakehouse.gold.contract): one row
+-- MA payer coverage in the conformed contract (claims_lakehouse.gold.contract): one row
 -- per enrollment span of a member. Gold unions it with every registered payer's.
 --
 -- A span is an enrollment start date of a member; its end date (termination) and

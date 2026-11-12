@@ -1,4 +1,4 @@
-"""Humana staging: readable names and types for HUM_ELIG and HUM_MEDCLM.
+"""MA payer staging: readable names and types for HUM_ELIG and HUM_MEDCLM.
 
 Input is bronze rows from current deliveries only (claims_lakehouse.silver.deliveries).
 No rows are filtered or de-duplicated here. Names follow the sibling repo
@@ -118,7 +118,7 @@ STAGING = {
 
 
 def stage_file(current_bronze: DataFrame, file_type: str) -> DataFrame:
-    """Stage one Humana file type from its current-delivery bronze rows."""
+    """Stage one MA payer file type from its current-delivery bronze rows."""
     return stage(current_bronze, STAGING[file_type])
 
 

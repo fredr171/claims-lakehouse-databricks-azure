@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "claims-lakehouse"
 version = "0.1.0"
-description = "Event-driven claims lakehouse on Azure and Databricks (CMS CCLF + Humana MA)"
+description = "Event-driven claims lakehouse on Azure and Databricks (CMS CCLF + a fictional Medicare Advantage payer)"
 readme = "README.md"
 # Python 3.12 is the version on the Databricks serverless runtime.
 requires-python = ">=3.12,<3.13"

@@ -1,12 +1,14 @@
 """Stop vs warn gating across four job runs (months 2023-01 to 2023-04, both payers).
 
-run 1  01 clean; 02 with an odd CCLF claim end date      CCLF warned, Humana passed
-run 2  03 with a broken Humana claims extract             Humana stopped, CCLF refreshed
-run 3  04 clean Humana; 04 with a bad CCLF action code    both stopped (Humana still,
-                                                          blocked by 03)
-run 4  corrected re-sends of Humana 03 and CCLF 04        both recover; the result
-                                                          equals a clean load of the
-                                                          same current files
+run 1  01 clean; 02 with an odd CCLF claim end date      CCLF warned, MA passed
+run 2  03 with a broken MA claims extract                MA stopped, CCLF refreshed
+run 3  04 clean MA; 04 with a bad CCLF action code       both stopped (MA still
+                                                         blocked by 03)
+run 4  corrected re-sends of MA 03 and CCLF 04           both recover; the result
+                                                         equals a clean load of the
+                                                         same current files
+
+MA is the fictional Medicare Advantage payer.
 """
 
 from decimal import Decimal
@@ -118,7 +120,7 @@ def test_a_stop_holds_back_its_payer_and_the_other_payer_still_refreshes(run):
     runs, *_ = run
     assert statuses(runs[1]) == {CMS: "warned", HUMANA: "stopped"}
     assert runs[1]["outcomes"][HUMANA].stopping == {"rules_mostly_hold"}
-    # Humana's silver and its slice of gold are exactly what run 1 published.
+    # The MA payer's silver and its slice of gold are exactly what run 1 published.
     assert runs[1]["humana_silver"] == runs[0]["humana_silver"]
     assert runs[1]["humana_gold"] == runs[0]["humana_gold"]
     # CCLF moved on to 2023-03.

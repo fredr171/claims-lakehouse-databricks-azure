@@ -6,7 +6,7 @@ what a failed run reports, and the notifier turns it into a GitHub issue.
 
 The keys directory has the generator's layout (synthetic-payer-files):
     <keys>/                 CMS CCLF answer keys, crossover_members.csv, summary.json
-    <keys>/humana/          Humana answer keys, summary.json
+    <keys>/humana/          MA payer answer keys, summary.json
 Member months have no answer key, so write_member_month_keys() adds member_months.csv to
 each payer's key folder, counted independently from the delivered eligibility files with
 the generator's own coverage-span rule. It needs the generator package (a dev dependency);

@@ -40,7 +40,7 @@ locals {
   schemas = {
     bronze        = "Every validated delivery, all columns as strings, plus lineage"
     silver_cclf   = "CMS CCLF (Medicare FFS) silver, written by the CCLF pipeline"
-    silver_humana = "Humana Medicare Advantage silver, written by the Humana pipeline"
+    silver_humana = "Medicare Advantage payer silver, written by its pipeline"
     gold          = "Payer-agnostic marts"
     ops           = "Answer keys and run bookkeeping"
   }

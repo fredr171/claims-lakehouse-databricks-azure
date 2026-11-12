@@ -60,7 +60,7 @@ resources:
           pipeline_task:
             pipeline_id: ${resources.pipelines.silver_cclf.id}
 
-        # --- Humana MA ---------------------------------------------------------------------
+        # --- MA payer ----------------------------------------------------------------------
         - task_key: prepare_humana
           depends_on: [{ task_key: bronze }]
           environment_key: default
