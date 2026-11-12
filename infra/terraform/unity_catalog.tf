@@ -30,10 +30,8 @@ resource "databricks_external_location" "archive" {
   # (eventgrid.tf), so the subscription and the queue role must exist first.
   enable_file_events = true
   file_event_queue {
-    provided_aqs {
-      queue_url       = azurerm_storage_queue.archive_events.url
-      resource_group  = azurerm_resource_group.main.name
-      subscription_id = data.azurerm_client_config.current.subscription_id
+    provided_aqs { # the queue alone: the API rejects a subscription for provided queues
+      queue_url = azurerm_storage_queue.archive_events.url
     }
   }
   depends_on = [
