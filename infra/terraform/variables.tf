@@ -31,3 +31,19 @@ variable "github_repository" {
   type        = string
   default     = "fredr171/claims-lakehouse-databricks-azure"
 }
+
+variable "monthly_budget" {
+  description = "Monthly cost budget for the environment, in the billing currency."
+  type        = number
+  default     = 25
+}
+
+variable "budget_alert_emails" {
+  description = "Who the budget emails at 50% and 90% of actual spend and 100% forecast. Set it in terraform.tfvars, never in the repo."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.budget_alert_emails) > 0
+    error_message = "budget_alert_emails needs at least one address."
+  }
+}

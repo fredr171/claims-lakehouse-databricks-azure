@@ -321,6 +321,10 @@ in archive                              └─► prepare_humana ► full refres
     default network, which alone would cost more than the budget. Production would use VNet
     injection.
   - **A daily cap on Log Analytics.**
+  - **A budget that emails** (`budget.tf`): $25 a month over this environment's two
+    resource groups, with emails at 50% and 90% of actual spend and when the month's
+    forecast passes 100%. It is created and destroyed with the environment, which is when
+    it can spend.
   - **Key Vault without purge protection,** so the environment can be destroyed and
     rebuilt under the same names.
 
@@ -454,7 +458,7 @@ lowercase letters or digits; it makes the storage and Key Vault names globally u
 
 ```powershell
 ./infra/bootstrap/bootstrap-state.ps1 -Suffix <suffix>   # once: remote-state account
-Copy-Item infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars  # set suffix
+Copy-Item infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars  # set suffix and budget emails
 $env:ARM_SUBSCRIPTION_ID = az account show --query id -o tsv
 cd infra/terraform
 terraform init "-backend-config=backend.hcl"
