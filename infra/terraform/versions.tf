@@ -14,6 +14,10 @@ terraform {
       source  = "databricks/databricks"
       version = "~> 1.0"
     }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 3.0"
+    }
     http = {
       source  = "hashicorp/http"
       version = "~> 3.0"
@@ -48,6 +52,9 @@ provider "azurerm" {
   # Storage accounts here disallow shared keys, so data-plane calls use Entra ID.
   storage_use_azuread = true
 }
+
+# The deploy workflow's Entra ID application (github_oidc.tf), in the Azure CLI's tenant.
+provider "azuread" {}
 
 # Only for resources azurerm cannot express correctly (see functions.tf). Uses the same
 # Azure CLI sign-in and ARM_SUBSCRIPTION_ID as azurerm.

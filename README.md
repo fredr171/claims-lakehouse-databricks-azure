@@ -301,6 +301,15 @@ in archive                              └─► prepare_humana ► full refres
   adds a key-based `AzureWebJobsStorage` connection string
   ([hashicorp/terraform-provider-azurerm#29149](https://github.com/hashicorp/terraform-provider-azurerm/issues/29149)),
   which a keyless storage account rejects.
+- **CI and deployment** (`.github/workflows/`):
+  - **`ci`** runs on every pull request: ruff, `terraform fmt` and `validate`, and the fast
+    tests on a local Spark session. No Azure access.
+  - **`deploy`** is started by hand and deploys code only: both Functions and the bundle. It
+    signs in with **OIDC**: GitHub issues a short-lived token for a run in the `dev`
+    environment, and a federated credential on an Entra ID application
+    (`github_oidc.tf`) trusts it, so no Azure secret is stored in GitHub. That identity may
+    zip-deploy the two Function apps and deploy the bundle, and nothing else.
+    Infrastructure stays a reviewed local `terraform apply`.
 - **Kept inside a ~$25/month budget:**
   - **Serverless compute** for jobs, pipelines and SQL.
   - **No NAT gateway in Databricks.** Classic clusters get public IPs (with no inbound ports
@@ -438,6 +447,23 @@ $name = terraform -chdir=infra/terraform output -raw github_token_secret
 $token = Read-Host -AsSecureString 'GitHub token'
 az keyvault secret set --vault-name $kv -n $name --value ([pscredential]::new('x', $token).GetNetworkCredential().Password) -o none
 ```
+
+### Deploying from GitHub
+
+After `terraform apply`, the `deploy` workflow can replace the manual Function and bundle
+deploys. Create a `dev` environment in the repository settings and set its variables from
+Terraform (none are secrets; none are committed):
+
+| Variable | Value |
+|---|---|
+| `AZURE_CLIENT_ID` | `terraform output -raw github_deploy_client_id` |
+| `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | `az account show --query "[tenantId, id]"` |
+| `RESOURCE_GROUP` | `terraform output -raw resource_group_name` |
+| `VALIDATION_FUNCTION`, `NOTIFIER_FUNCTION` | `terraform output -raw validation_function_name` / `notifier_function_name` |
+| `DATABRICKS_HOST` | `terraform output -raw databricks_workspace_url` |
+| `ARCHIVE_URL`, `RUNNER_APPLICATION_ID` | `terraform output -raw archive_url` / `runner_application_id` |
+
+Then run it with `gh workflow run deploy`.
 
 ### Databricks
 

@@ -60,3 +60,9 @@ output "notifier_secret_scope" {
   description = "Databricks secret scope with the notifier's job-outcome URL (bundle variable)."
   value       = databricks_secret_scope.notifier.name
 }
+
+# GitHub environment variables for the deploy workflow (Settings -> Environments -> dev).
+output "github_deploy_client_id" {
+  description = "AZURE_CLIENT_ID for the deploy workflow."
+  value       = azuread_application.github_deploy.client_id
+}

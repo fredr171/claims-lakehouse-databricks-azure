@@ -93,8 +93,12 @@ resource "databricks_access_control_rule_set" "runner_users" {
     role       = "roles/servicePrincipal.manager"
   }
 
+  # The deploy workflow's identity (github_oidc.tf) deploys the bundle too.
   grant_rules {
-    principals = [data.databricks_current_user.deployer.acl_principal_id]
-    role       = "roles/servicePrincipal.user"
+    principals = [
+      data.databricks_current_user.deployer.acl_principal_id,
+      databricks_service_principal.github_deploy.acl_principal_id,
+    ]
+    role = "roles/servicePrincipal.user"
   }
 }

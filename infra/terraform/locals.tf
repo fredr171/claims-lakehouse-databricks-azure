@@ -22,6 +22,7 @@ locals {
     pii_readers           = "${local.project}-pii-readers-${var.environment}"
     notifier_secret_scope = "${local.project}-notifier"
     notifier_action_group = "ag-${local.project}-notifier-${var.environment}"
+    github_deploy         = "${local.project}-github-deploy-${var.environment}"
   }
 
   # Unity Catalog privileges of the runner (runner.tf).
