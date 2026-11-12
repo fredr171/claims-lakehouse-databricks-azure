@@ -47,7 +47,7 @@ def report_from_alert(payload: str | bytes | dict[str, Any]) -> Report:
     feed = _feed(condition)
     check = f"alert/{rule}"
     fired = essentials.get("firedDateTime", "")
-    reference = f"alert {rule} ({fired})" if fired else f"alert {rule}"
+    reference = f"{rule} ({fired})" if fired else rule  # quoted as "alert <reference>"
 
     if essentials.get("monitorCondition") == "Resolved":
         return Report("alert", reference, problems=(), scopes=(f"{feed}/{check}",))

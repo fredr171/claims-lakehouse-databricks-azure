@@ -346,3 +346,11 @@ def test_a_repaired_task_counts_its_latest_attempt():
     ]
     assert latest_states(attempts) == {"answer_keys": "SUCCESS", "gold": "SUCCESS"}
     assert latest_states(reversed(attempts))["answer_keys"] == "SUCCESS"
+
+
+def test_alert_issues_name_the_rule_once():
+    tracker = FakeTracker()
+    reconcile(report_from_alert(alert("Fired", feed="cclf")), tracker)
+    body = tracker.issues[1]["body"]
+    assert "from alert files-quarantined (2026-11-11T19:00:00Z)" in body
+    assert "alert alert" not in body

@@ -59,8 +59,9 @@ def _body(report: Report, problem: Problem, key: str) -> str:
         f"- **Check:** `{problem.check}`\n"
         f"- **Status:** {problem.status.value}\n"
         f"- **Detail:** {problem.detail}\n\n"
-        f"Each later {report.source} that still finds it adds a comment; the first one that "
-        "passes this check closes the issue."
+        f"Each later {report.source} report that still finds it adds a comment. It closes when "
+        f"a later {report.source} report passes this check (an alert that does not resolve "
+        "itself, such as a quarantined file, is closed by hand)."
     )
 
 
