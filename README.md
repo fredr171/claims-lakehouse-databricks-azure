@@ -217,6 +217,11 @@ its claim voided. Every result equals a clean load of the corrected files.
     silver and gold are computed from real values while people querying the tables see
     masked ones. Without that, a mask would also hide the values from the tables built
     downstream, and member history would break.
+  - **Checked live:** the deployer has SELECT on bronze, silver and gold but is not a PII
+    reader. Querying member history shows `[masked]` names and addresses and NULL birth
+    dates, while the address changes behind each UPDATE version were still detected. The
+    grant goes to the user directly: Unity Catalog grants need a user or an account-level
+    group, and the PII readers group is workspace-local (masks check it with `is_member`).
   - Lakeflow takes a mask only as part of a table's full schema, so the schemas are derived
     from the tables' own build functions run on empty inputs, never written by hand. A test
     requires each declared schema to equal the schema of the table built from real data.
