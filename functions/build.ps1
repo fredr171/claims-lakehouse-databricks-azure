@@ -32,14 +32,15 @@ if (Test-Path $zip) { Remove-Item -Force $zip }
 New-Item -ItemType Directory -Force $staging | Out-Null
 
 Get-ChildItem $source -File | Copy-Item -Destination $staging
-Copy-Item -Recurse (Join-Path $repo 'src\claims_lakehouse') $staging
+Copy-Item -Recurse (Join-Path (Join-Path $repo 'src') 'claims_lakehouse') $staging
 Copy-Item -Recurse (Join-Path $repo 'config') $staging
 
 # No caches or compiled files in the package.
 Get-ChildItem $staging -Recurse -Directory -Filter '__pycache__' | Remove-Item -Recurse -Force
 
 # Not Compress-Archive: on Windows PowerShell 5.1 it writes entry names with backslashes,
-# which the Linux Functions host extracts as literal file names.
+# which the Linux Functions host extracts as literal file names. Works on Windows
+# PowerShell and on PowerShell 7 (the deploy workflow, on Linux).
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::Open($zip, 'Create')
 try {
