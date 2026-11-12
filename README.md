@@ -11,7 +11,7 @@ its **answer keys** (the exact results a correct pipeline produces) exactly. The
 decisions are the same; the stack is platform-native. Where this repo differs, the reason is
 below. All data is synthetic.
 
-> **Status:** phases 1 and 2 are done.
+> **Status:** phases 1 to 3 are done; phase 4 is in progress.
 > - **Phase 1:** config, file validation, silver and gold logic, and tests against both
 >   answer keys, all running locally on PySpark.
 > - **Phase 2:** Terraform for storage, Event Grid, the validation Function, Key Vault and
@@ -19,8 +19,11 @@ below. All data is synthetic.
 >   quarantined with its report, a repeat is a duplicate, and the archive refuses deletes.
 >   `infra/teardown.ps1` removes all of it.
 >
-> Databricks pipelines and jobs (phase 3), and the notifier, CI and dashboard (phase 4)
-> come next.
+> - **Phase 3:** Unity Catalog, the bronze and per-payer pipelines, gold and the job.
+>   Verified live on serverless: gold matches both answer keys for all 36 months, and a
+>   corrected re-send takes the full-refresh path and still matches.
+> - **Phase 4 (in progress):** the notifier and GitHub issues, the provided file-events
+>   queue for the trigger, CI, and the dashboard.
 
 **Stack:** Python 3.12, PySpark 4 (Databricks serverless), Lakeflow Declarative Pipelines,
 Auto Loader, Unity Catalog, Azure Functions, Event Grid, ADLS Gen2, Terraform, Databricks
@@ -39,8 +42,9 @@ flowchart LR
     bronze --> hum["Humana pipeline<br/>silver + conformed views"]
     cms --> gold[("gold marts<br/>SQL, Unity Catalog")]
     hum --> gold
-    gold --> check["Answer-key check"]
-    fn & check --> notifier["Notifier Function"] --> issues["GitHub issues"]
+    gold --> check["Answer-key check"] --> outcome["Run outcome<br/>per feed"]
+    outcome --> notifier["Notifier Function"] --> issues["GitHub issues"]
+    fn -.->|"Azure Monitor alerts"| notifier
 ```
 
 | Layer | Where | What it holds |
@@ -239,6 +243,8 @@ The job is a Databricks Asset Bundle (`databricks.yml`, `resources/`):
 ```
 file arrives ─► create_masks ─► bronze ─┬─► prepare_cclf ──► full refresh? ─► silver_cclf ───┐
 in archive                              └─► prepare_humana ► full refresh? ─► silver_humana ─┴─► gold ─► answer_keys
+                                                                                                        │
+                                                                         report_outcome (always) ◄──────┘
 ```
 
 - **File-arrival trigger on the archive**, so the job sees only validated files. It waits
@@ -265,6 +271,8 @@ in archive                              └─► prepare_humana ► full refres
   workspace and every Unity Catalog object (storage credential, external locations,
   catalog, schemas, the answer-key volume, the runner service principal, the PII readers
   group, and the runner's grants); the bundle owns only code-level resources.
+- **The last task reports the outcome to the notifier** (always runs: `run_if: ALL_DONE`).
+  See [the notifier](#7-notifier-one-github-issue-per-problem).
 - **The runner has only what it needs:**
   - read files on the archive (nothing can write it);
   - create and refresh tables in the data schemas;
@@ -288,8 +296,8 @@ in archive                              └─► prepare_humana ► full refres
   redeployed, and failed deliveries go to a dead-letter container. On an ADLS Gen2 account
   a file is created empty and then flushed, so the subscription passes only the calls that
   finish a file (`FlushWithClose`, `PutBlob`, `PutBlockList`, `CopyBlob`).
-- **The validation Function runs on Flex Consumption** (Python 3.12), billed per execution.
-  The app is defined with the `azapi` provider: azurerm's Flex Consumption resource always
+- **Both Functions run on Flex Consumption** (Python 3.12), billed per execution, one
+  plan each (Flex allows one app per plan). The apps are defined with the `azapi` provider: azurerm's Flex Consumption resource always
   adds a key-based `AzureWebJobsStorage` connection string
   ([hashicorp/terraform-provider-azurerm#29149](https://github.com/hashicorp/terraform-provider-azurerm/issues/29149)),
   which a keyless storage account rejects.
@@ -302,6 +310,37 @@ in archive                              └─► prepare_humana ► full refres
   - **A daily cap on Log Analytics.**
   - **Key Vault without purge protection,** so the environment can be destroyed and
     rebuilt under the same names.
+
+### 7. Notifier: one GitHub issue per problem
+Every job run and every Azure Monitor alert reaches the notifier Function, which keeps one
+GitHub issue per problem: it opens the issue, comments while the problem persists, and
+closes it when a later run or alert passes that check.
+
+- **Job runs:** the job's last task (`report_outcome`, always run) classifies the run per
+  feed (`claims_lakehouse/jobs/outcome.py`) from its task states, each payer's pipeline
+  event log and the answer-key result, and posts the report:
+  - **warned:** a warn or drop expectation failed rows;
+  - **stopped:** a stop expectation failed the payer's update (its tables keep their last
+    good version);
+  - **error:** any other failed task, or gold differing from the answer keys.
+  The task then fails the run if anything stopped or errored, so a run is never marked as
+  succeeded because its last task passed.
+- **Issues are keyed by the feed the failing check reads**, plus the source and the check
+  (`job/cclf/expectation/keys_unique`), in a hidden marker in the issue body. A run closes
+  only issues for checks it ran to completion: a run that failed in bronze leaves the
+  payers' issues open, and one payer recovering never closes the other's.
+- **Azure Monitor alerts** (common alert schema, through an action group):
+  - **quarantined files:** one alert per feed (a log alert split by the `feed` the
+    validation Function logs). It does not resolve itself, because a quiet window does not
+    mean the payer re-sent the file;
+  - **validation Function failures:** resolves itself after a clean window, which closes
+    the issue.
+- **Identifiers and counts only.** Pipeline errors can quote rows, so only expectation names
+  are taken from them, by pattern; alert IDs (which contain the subscription) are dropped.
+- **Credentials:** the GitHub token is a fine-grained token with issue access to this
+  repository only, stored in Key Vault and read through a Key Vault reference. The job finds
+  the notifier's URL, with its function key, in a Databricks secret scope that only the
+  runner can read.
 
 ## Testing
 
@@ -338,6 +377,9 @@ deliberately broken data:
   - the pipeline's supersession count agrees with the job's count;
   - the answer-key check passes on the full load and reports each of five kinds of broken
     gold.
+- **Notifier:** the issue lifecycle on a fake tracker (open, comment, close; scope rules;
+  alert and job issues kept apart), classifying runs per feed, and the GitHub client against
+  a fake API.
 - **Mutation checks:** during development, breaking a rule (adjustment netting, terminations,
   the active-version rule, status mappings, the any-day member-month rule, delivery ordering)
   was confirmed to fail the tests.
@@ -375,13 +417,26 @@ terraform apply      # creates billable resources
 cd ../..; ./infra/teardown.ps1   # between live runs: destroy, plus the Databricks leftovers
 ```
 
-Deploy the validation Function after `apply` (dependencies install in a remote build):
+Deploy both Functions after `apply` (dependencies install in a remote build):
 
 ```powershell
-./functions/validation/build.ps1
-$fn = terraform -chdir=infra/terraform output -raw validation_function_name
-az functionapp deployment source config-zip -g rg-claims-lakehouse-dev -n $fn `
-    --src build/validation.zip --build-remote true
+foreach ($app in 'validation', 'notifier') {
+    ./functions/build.ps1 -App $app
+    $fn = terraform -chdir=infra/terraform output -raw "${app}_function_name"
+    az functionapp deployment source config-zip -g rg-claims-lakehouse-dev -n $fn `
+        --src "build/$app.zip" --build-remote true
+}
+```
+
+The notifier needs a GitHub token in Key Vault: a fine-grained personal access token for
+this repository only, with read and write access to issues. Paste it when prompted, so it
+never appears in the shell history:
+
+```powershell
+$kv = terraform -chdir=infra/terraform output -raw key_vault_name
+$name = terraform -chdir=infra/terraform output -raw github_token_secret
+$token = Read-Host -AsSecureString 'GitHub token'
+az keyvault secret set --vault-name $kv -n $name --value ([pscredential]::new('x', $token).GetNetworkCredential().Password) -o none
 ```
 
 ### Databricks
@@ -390,7 +445,7 @@ Requires the Databricks CLI (`winget install Databricks.DatabricksCLI`). It sign
 the Azure CLI login, and takes the workspace and archive from the environment:
 
 ```powershell
-$env:DATABRICKS_HOST = "https://" + (terraform -chdir=infra/terraform output -raw databricks_workspace_url)
+$env:DATABRICKS_HOST = terraform -chdir=infra/terraform output -raw databricks_workspace_url
 $env:BUNDLE_VAR_archive_url = terraform -chdir=infra/terraform output -raw archive_url
 $env:BUNDLE_VAR_runner_application_id = terraform -chdir=infra/terraform output -raw runner_application_id
 databricks bundle validate

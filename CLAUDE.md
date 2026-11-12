@@ -152,7 +152,12 @@ check → job outcomes go to the **notifier Azure Function** → GitHub issues.
   it persists, close it on recovery. Key issues by the feed the **failing check** reads, not
   every feed the run built.
 - GitHub credentials (GitHub App or fine-grained token, issues scope on this repo only) live
-  in Key Vault.
+  in Key Vault. **Decided:** a fine-grained token, read through a Key Vault reference.
+- **Decided:** the job's last task (`report_outcome`, `run_if: ALL_DONE`) classifies the run
+  per feed and POSTs it to the notifier (URL with function key in a Databricks secret scope
+  only the runner reads), then fails the run on stopped or error. Alerts come through an
+  action group (common alert schema). Issues are keyed `source/feed/check` in a hidden body
+  marker; a report closes only issues for checks it ran to completion.
 
 ### Infrastructure and deployment
 - **Terraform** owns infrastructure: resource group, storage, Event Grid, Functions, Key Vault,
