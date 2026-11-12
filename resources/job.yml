@@ -109,6 +109,9 @@ resources:
         # notifier (GitHub issues). It fails the run if a payer stopped or a task errored.
         - task_key: report_outcome
           run_if: ALL_DONE
+          # It fails on purpose after a stop; serverless would otherwise retry it, posting
+          # the same outcome again.
+          max_retries: 0
           depends_on: [{ task_key: answer_keys }]
           environment_key: default
           spark_python_task:
