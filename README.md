@@ -351,6 +351,16 @@ closes it when a later run or alert passes that check.
   the notifier's URL, with its function key, in a Databricks secret scope that only the
   runner can read.
 
+### 8. Dashboard and saved queries
+- **Saved queries** (`queries/`): PMPM by payer and month, member months, payer switchers,
+  the claim status mix and payer deliveries, in Databricks SQL over gold.
+- **An AI/BI dashboard** (`resources/dashboards/`), deployed with the bundle, on the
+  workspace's serverless starter warehouse. Its datasets are the saved queries verbatim,
+  and viewers query with their own permissions (`embed_credentials: false`).
+- **Tested like the rest:** every saved query runs on the local gold built from the 36
+  months and agrees with the answer keys (17 switchers; member months match `agg_payer_monthly`),
+  and a test fails if a dashboard dataset drifts from its saved query.
+
 ## Testing
 
 `pytest` with a local Spark session; no Azure access needed. A local harness stands in for

@@ -23,6 +23,10 @@ variables:
   pii_readers_group:
     description: Sees unmasked names, addresses and birth dates (terraform output pii_readers_group)
     default: claims-lakehouse-pii-readers-dev
+  warehouse_id:
+    description: SQL warehouse the dashboard runs on (the workspace's serverless starter warehouse)
+    lookup:
+      warehouse: Serverless Starter Warehouse
   notifier_secret_scope:
     description: Secret scope holding the notifier's job-outcome URL (terraform output notifier_secret_scope)
     default: claims-lakehouse-notifier
