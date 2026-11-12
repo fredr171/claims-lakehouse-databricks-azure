@@ -11,7 +11,7 @@ its **answer keys** (the exact results a correct pipeline produces) exactly. The
 decisions are the same; the stack is platform-native. Where this repo differs, the reason is
 below. All data is synthetic.
 
-> **Status:** phases 1 to 3 are done; phase 4 is in progress.
+> **Status:** all four phases are done.
 > - **Phase 1:** config, file validation, silver and gold logic, and tests against both
 >   answer keys, all running locally on PySpark.
 > - **Phase 2:** Terraform for storage, Event Grid, the validation Function, Key Vault and
@@ -22,8 +22,11 @@ below. All data is synthetic.
 > - **Phase 3:** Unity Catalog, the bronze and per-payer pipelines, gold and the job.
 >   Verified live on serverless: gold matches both answer keys for all 36 months, and a
 >   corrected re-send takes the full-refresh path and still matches.
-> - **Phase 4 (in progress):** the notifier and GitHub issues, the provided file-events
->   queue for the trigger, CI, and the dashboard.
+> - **Phase 4:** the notifier and GitHub issues, the provided file-events queue for the
+>   trigger, CI with an OIDC deploy, and the dashboard. Verified live: every delivery
+>   started its run through the trigger; a duplicate-key delivery stopped CCLF while
+>   Humana refreshed, opened an issue, and a corrected re-send closed it; a quarantined
+>   file opened an alert issue; and after all 36 months gold matched both answer keys.
 
 **Stack:** Python 3.12, PySpark 4 (Databricks serverless), Lakeflow Declarative Pipelines,
 Auto Loader, Unity Catalog, Azure Functions, Event Grid, ADLS Gen2, Terraform, Databricks
@@ -257,8 +260,9 @@ in archive                              └─► prepare_humana ► full refres
   which needs Storage Account Contributor on the lake. In the first live run that setup
   failed with a storage `AuthorizationFailure` and then stayed "being provisioned"; the
   likely cause is that it uses account keys, which this account disables. Providing the
-  queue removes both management roles and the dependency on keys. Databricks documents
-  provided queues but does not validate them, so the live run is the test.
+  queue removes both management roles and the dependency on keys. In the phase 4 live run
+  all four deliveries (two batches, a broken file and its re-send) started a run this way,
+  a few minutes after the last file arrived.
 - **Gold runs even when a payer stopped** (`run_if: ALL_DONE`): the stopped payer's tables
   keep their last good update, and the run still ends failed.
 - **The last task compares gold with the answer keys** (`claims_lakehouse/checks/`) and
@@ -350,6 +354,27 @@ closes it when a later run or alert passes that check.
   repository only, stored in Key Vault and read through a Key Vault reference. The job finds
   the notifier's URL, with its function key, in a Databricks secret scope that only the
   runner can read.
+- **No retries for a stop.** A stop is a data problem, so retrying cannot fix it. The
+  live run showed serverless retrying twice over: the stopped pipeline update four times
+  (about ten billed minutes), and `report_outcome`, which fails on purpose, once (a second
+  "still stopped" comment). The silver pipelines set `pipelines.numUpdateRetryAttempts: 0`
+  and the task sets `max_retries: 0`; the job's run repair covers a transient failure.
+
+The live run: `scripts/live_run.py break claims_header 2023-06` sent a file with a
+duplicated row. It passed file validation, CCLF stopped on `keys_unique` while Humana
+refreshed, gold still ran, and the run failed:
+
+![The stopped run: silver_cclf failed, silver_humana and gold succeeded, report_outcome failed the run](docs/images/job-run-stopped.png)
+
+The notifier opened an issue, and `resend` (the same records, a new checksum) closed it.
+The duplicate "still stopped" comment is the retry described above:
+
+![Issue #6: opened by the stopped run, closed by the run after the re-send](docs/images/issue-stopped-recovered.png)
+
+A file with a byte-order mark was quarantined, and the alert opened an issue for its feed.
+It stays open until someone closes it, once the payer has re-sent the file:
+
+![Issue #7: the files-quarantined alert for the cclf feed](docs/images/issue-files-quarantined.png)
 
 ### 8. Dashboard and saved queries
 - **Saved queries** (`queries/`): PMPM by payer and month, member months, payer switchers,
@@ -360,6 +385,8 @@ closes it when a later run or alert passes that check.
 - **Tested like the rest:** every saved query runs on the local gold built from the 36
   months and agrees with the answer keys (17 switchers; member months match `agg_payer_monthly`),
   and a test fails if a dashboard dataset drifts from its saved query.
+
+![The dashboard after all 36 months: 2 payers, 17 switchers, PMPM, member months and claim statuses](docs/images/dashboard.png)
 
 ## Testing
 

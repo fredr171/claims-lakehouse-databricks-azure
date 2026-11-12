@@ -108,6 +108,8 @@ check → job outcomes go to the **notifier Azure Function** → GitHub issues.
   A stop must leave previously published silver and gold intact: every published table of a
   payer depends on that payer's gate tables, so a failed expectation blocks the whole payer.
   Row expectations check formats on the delivered text, before typing (`try_cast` is lenient).
+  Nothing retries a stop: the silver pipelines set `pipelines.numUpdateRetryAttempts: 0` and
+  `report_outcome` sets `max_retries: 0` (the live run billed four retries of one stop).
 - **Member history (SCD type 2)** uses AUTO CDC with `SEQUENCE BY` delivery month plus archive
   time (`_archived_at`) as a tiebreaker. Change type (new, update, termination) is derived, not trusted
   from the file.
