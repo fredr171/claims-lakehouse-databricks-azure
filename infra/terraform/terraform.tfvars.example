@@ -3,3 +3,6 @@
 
 # 3-7 lowercase letters or digits; the same value you passed to bootstrap-state.ps1.
 suffix = "abc12"
+
+# Who the monthly budget emails (50% and 90% of actual spend, 100% forecast).
+budget_alert_emails = ["you@example.com"]
