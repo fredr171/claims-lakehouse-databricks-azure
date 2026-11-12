@@ -89,8 +89,10 @@ resource "azurerm_storage_queue" "archive_events" {
   storage_account_id = azurerm_storage_account.lake.id
 }
 
+# On the account, not the queue: Event Grid's delivery check rejects a queue-scoped role
+# ("Managed Identity Authorization Error"). The archive queue is the lake's only queue.
 resource "azurerm_role_assignment" "eventgrid_archive_queue_sender" {
-  scope                = azurerm_storage_queue.archive_events.id
+  scope                = azurerm_storage_account.lake.id
   role_definition_name = "Storage Queue Data Message Sender"
   principal_id         = azurerm_eventgrid_system_topic.lake.identity[0].principal_id
 }
