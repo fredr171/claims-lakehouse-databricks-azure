@@ -53,4 +53,6 @@ resource "databricks_service_principal" "github_deploy" {
   application_id   = azuread_application.github_deploy.client_id
   display_name     = local.names.github_deploy
   workspace_access = true
+  # The bundle's dashboard names its SQL warehouse, which needs Databricks SQL access.
+  databricks_sql_access = true
 }
