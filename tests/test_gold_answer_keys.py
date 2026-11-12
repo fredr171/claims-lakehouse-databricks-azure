@@ -100,7 +100,7 @@ def test_net_paid_by_service_month_matches_the_answer_key(gold, generated, payer
 
 
 def test_claim_statuses_are_conformed_across_payers(gold, generated):
-    """CANCELLED (CCLF) and VOIDED (Humana) are one status in gold, as are ADJUSTED and
+    """CANCELLED (CCLF) and VOIDED (MA payer) are one status in gold, as are ADJUSTED and
     REPLACED; the counts come from both payers' summaries."""
     cms = json.loads((generated / "key" / "summary.json").read_text(encoding="utf-8"))
     hum = json.loads((generated / "key" / "humana" / "summary.json").read_text(encoding="utf-8"))

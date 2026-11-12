@@ -1,4 +1,4 @@
-"""Humana silver against the generator's answer keys (all 36 months, loaded in order).
+"""MA payer silver against the generator's answer keys (all 36 months, loaded in order).
 
 The answer keys are written from the generator's own simulation, not by re-reading the
 CSVs, so matching them exactly is an independent check of staging, member history and

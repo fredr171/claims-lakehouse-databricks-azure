@@ -20,7 +20,7 @@ payers:
     onboarded_month: "2023-01"
     retired_month: null
   - payer_id: humana_ma
-    payer_name: Humana Medicare Advantage
+    payer_name: Medicare Advantage (fictional payer)
     line_of_business: Medicare Advantage
     feed: humana
     onboarded_month: "2023-01"

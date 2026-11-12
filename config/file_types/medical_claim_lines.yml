@@ -1,4 +1,4 @@
-# Humana MA medical claims (UB-04 and CMS-1500 in one file): one row
+# MA payer medical claims (UB-04 and CMS-1500 in one file): one row
 # per claim line per claim version. A reversal reuses CLAIM_ID with CLAIM_FREQ_CD 8.
 # expected_columns: the header of HUM_MEDCLM_YYYYMM.csv from synthetic-payer-files v1.0.0,
 # in order (tests/test_config.py checks them against a generated delivery).

@@ -1,4 +1,4 @@
-"""Humana claim families, on hand-built claim versions.
+"""MA payer claim families, on hand-built claim versions.
 
 Every scenario is its own family in one table, built once: one Spark query for the
 whole module instead of one per test.

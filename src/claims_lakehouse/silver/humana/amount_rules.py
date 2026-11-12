@@ -1,4 +1,4 @@
-"""Humana line amount rules: the first rule a staged HUM_MEDCLM line breaks, or NULL.
+"""MA payer line amount rules: the first rule a staged HUM_MEDCLM line breaks, or NULL.
 
 Originals and replacements (frequency 1 and 7): 0 <= paid <= allowed <= billed; denied
 lines allow and pay nothing; outside capitation, member cost share (copay + coinsurance
