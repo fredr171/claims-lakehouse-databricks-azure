@@ -6,8 +6,8 @@
 feeds:
   - name: cclf                     # CMS CCLF (Medicare fee-for-service)
     prefix: cms/cclf/
-  - name: humana                   # Humana Medicare Advantage
-    prefix: humana/ma/
+  - name: ma_payer                 # a fictional Medicare Advantage payer
+    prefix: ma_payer/ma/
 
 # Defaults for every file type; a file type may override any of them under `rules:`.
 default_rules:

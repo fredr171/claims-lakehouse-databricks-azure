@@ -19,9 +19,9 @@ payers:
     feed: cclf
     onboarded_month: "2023-01"
     retired_month: null
-  - payer_id: humana_ma
-    payer_name: Humana Medicare Advantage
+  - payer_id: ma_payer
+    payer_name: Fictional Medicare Advantage Payer
     line_of_business: Medicare Advantage
-    feed: humana
+    feed: ma_payer
     onboarded_month: "2023-01"
     retired_month: null

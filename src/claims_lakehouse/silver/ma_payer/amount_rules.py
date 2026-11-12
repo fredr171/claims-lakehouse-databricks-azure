@@ -1,4 +1,4 @@
-"""Humana line amount rules: the first rule a staged HUM_MEDCLM line breaks, or NULL.
+"""MA payer line amount rules: the first rule a staged MAP_MEDCLM line breaks, or NULL.
 
 Originals and replacements (frequency 1 and 7): 0 <= paid <= allowed <= billed; denied
 lines allow and pay nothing; outside capitation, member cost share (copay + coinsurance
@@ -15,7 +15,7 @@ from __future__ import annotations
 from pyspark.sql import Column
 from pyspark.sql import functions as F
 
-from claims_lakehouse.silver.humana.claim_families import CAPITATED, DENIED, VOID
+from claims_lakehouse.silver.ma_payer.claim_families import CAPITATED, DENIED, VOID
 
 COST_SHARE_TOLERANCE = 0.005
 

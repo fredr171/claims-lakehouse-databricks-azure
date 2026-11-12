@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from synthetic_payer_files import generate_cclf, generate_humana
+from synthetic_payer_files import generate_cclf, generate_ma_payer
 
 from claims_lakehouse.config import CONFIG_DIR_ENV_VAR, ConfigError, load_config
 
@@ -18,8 +18,8 @@ GENERATED_FILES = {
     "CCLF1": "claims_header",
     "CCLF4": "claims_diagnosis",
     "CCLF5": "part_b_physician_lines",
-    "HUM_ELIG": "member_eligibility",
-    "HUM_MEDCLM": "medical_claim_lines",
+    "MAP_ELIG": "member_eligibility",
+    "MAP_MEDCLM": "medical_claim_lines",
 }
 
 
@@ -32,10 +32,10 @@ def repo_config():
 
 
 def test_repo_config_loads(repo_config):
-    assert [f.name for f in repo_config.feeds] == ["cclf", "humana"]
+    assert [f.name for f in repo_config.feeds] == ["cclf", "ma_payer"]
     assert sorted(repo_config.file_types) == sorted(GENERATED_FILES.values())
-    assert [p.payer_id for p in repo_config.payers] == ["cms_ffs", "humana_ma"]
-    assert {ft.file_type for ft in repo_config.file_types_for_feed("humana")} == {
+    assert [p.payer_id for p in repo_config.payers] == ["cms_ffs", "ma_payer"]
+    assert {ft.file_type for ft in repo_config.file_types_for_feed("ma_payer")} == {
         "member_eligibility",
         "medical_claim_lines",
     }
@@ -55,11 +55,11 @@ def generated_month(tmp_path_factory):
     generate_cclf.main(
         [*months, "--output-dir", str(root / "cms"), "--answer-key-dir", str(root / "key")]
     )
-    generate_humana.main(
+    generate_ma_payer.main(
         [
             *months,
-            "--output-dir", str(root / "humana"),
-            "--answer-key-dir", str(root / "key" / "humana"),
+            "--output-dir", str(root / "ma_payer"),
+            "--answer-key-dir", str(root / "key" / "ma_payer"),
             "--crossover-dir", str(root / "key"),
         ]
     )  # fmt: skip
@@ -101,7 +101,7 @@ def test_delivery_month_from_file_name(repo_config, file_name, expected):
     ("path", "feed", "file_type", "file_name"),
     [
         ("cms/cclf/claims_header/CCLF1_202301.csv", "cclf", "claims_header", "CCLF1_202301.csv"),
-        ("humana/ma/unknown_type/x.csv", "humana", "unknown_type", "x.csv"),
+        ("ma_payer/ma/unknown_type/x.csv", "ma_payer", "unknown_type", "x.csv"),
     ],
 )
 def test_parse_landing_path(repo_config, path, feed, file_type, file_name):
@@ -125,7 +125,7 @@ def test_paths_that_are_not_deliveries(repo_config, path):
 
 def test_file_type_must_belong_to_the_feed(repo_config):
     right = repo_config.parse_landing_path("cms/cclf/claims_header/CCLF1_202301.csv")
-    wrong = repo_config.parse_landing_path("humana/ma/claims_header/CCLF1_202301.csv")
+    wrong = repo_config.parse_landing_path("ma_payer/ma/claims_header/CCLF1_202301.csv")
     unknown = repo_config.parse_landing_path("cms/cclf/claims_headers/CCLF1_202301.csv")
     assert repo_config.file_type_for(right).file_type == "claims_header"
     assert repo_config.file_type_for(wrong) is None

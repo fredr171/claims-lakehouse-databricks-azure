@@ -1,5 +1,5 @@
 # CCLF5 Part B physician claim lines: 1-4 lines per claim version.
-# expected_columns: the header of CCLF5_YYYYMM.csv from synthetic-payer-files v1.0.0,
+# expected_columns: the header of CCLF5_YYYYMM.csv from synthetic-payer-files v2.0.0,
 # in order (tests/test_config.py checks them against a generated delivery).
 feed: cclf
 file_type: part_b_physician_lines

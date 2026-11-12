@@ -16,7 +16,7 @@ CONTRACT: dict[str, list[tuple[str, str]]] = {
     # One row per coverage span of a payer member.
     "coverage": [
         ("payer_id", "string"),
-        ("payer_member_id", "string"),  # the payer's own id (CMS: MBI; Humana: MEMBER_ID)
+        ("payer_member_id", "string"),  # the payer's own id (CMS: MBI; MA payer: MEMBER_ID)
         ("beneficiary_mbi", "string"),  # the person across payers
         ("coverage_start_date", "date"),
         ("coverage_end_date", "date"),  # last covered day, capped at death; NULL while open

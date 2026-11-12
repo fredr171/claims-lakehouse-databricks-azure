@@ -1,7 +1,7 @@
-"""The Humana silver tables: what each reads, how it is built and the expectations it carries.
+"""The MA payer silver tables: what each reads, how it is built and the expectations it carries.
 
 TABLES is the one list both runtimes use (claims_lakehouse.silver.spec): the local tests
-call build(), and the Humana pipeline defines one table per entry.
+call build(), and the MA payer pipeline defines one table per entry.
 """
 
 from __future__ import annotations
@@ -12,10 +12,10 @@ from functools import partial
 from pyspark.sql import DataFrame
 
 from claims_lakehouse.silver.deliveries import current_rows, delivery_index
-from claims_lakehouse.silver.humana.amount_rules import amount_problem
-from claims_lakehouse.silver.humana.claim_families import claim_families, claim_versions
-from claims_lakehouse.silver.humana.quality import ROW_EXPECTATIONS, UNIQUE_KEYS
-from claims_lakehouse.silver.humana.staging import (
+from claims_lakehouse.silver.ma_payer.amount_rules import amount_problem
+from claims_lakehouse.silver.ma_payer.claim_families import claim_families, claim_versions
+from claims_lakehouse.silver.ma_payer.quality import ROW_EXPECTATIONS, UNIQUE_KEYS
+from claims_lakehouse.silver.ma_payer.staging import (
     MEMBER_ELIGIBILITY,
     MEMBER_TRACKED_COLUMNS,
     stage_file,

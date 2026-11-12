@@ -8,7 +8,7 @@ SUBPACKAGES = [
     "claims_lakehouse.bronze",
     "claims_lakehouse.silver",
     "claims_lakehouse.silver.cclf",
-    "claims_lakehouse.silver.humana",
+    "claims_lakehouse.silver.ma_payer",
     "claims_lakehouse.gold",
 ]
 

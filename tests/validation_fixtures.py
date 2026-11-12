@@ -6,7 +6,7 @@ disk still match these bytes, so git or an editor cannot quietly "fix" one):
 
     python tests/validation_fixtures.py
 
-The rows are from synthetic-payer-files v1.0.0 (seed 42, 2023-01). All synthetic.
+The rows are from synthetic-payer-files v2.0.0 (seed 42, 2023-01). All synthetic.
 """
 
 from __future__ import annotations

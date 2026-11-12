@@ -2,7 +2,7 @@
 
     lakehouse = LocalLakehouse(spark, config, archive)
     outcomes = lakehouse.update()        # payer_id -> PayerOutcome
-    lakehouse.published["humana_ma"]     # that payer's last published silver and conformed views
+    lakehouse.published["ma_payer"]     # that payer's last published silver and conformed views
     lakehouse.gold                       # the last published marts
 
 What it models (what Lakeflow and the job give on Databricks):
@@ -30,13 +30,13 @@ from pyspark.sql import DataFrame, SparkSession
 from claims_lakehouse.config import LakehouseConfig
 from claims_lakehouse.gold.build import build_conformed, build_gold
 from claims_lakehouse.silver.cclf import tables as cclf_tables
-from claims_lakehouse.silver.humana import tables as humana_tables
+from claims_lakehouse.silver.ma_payer import tables as ma_payer_tables
 from claims_lakehouse.silver.quality import Action, evaluate
 
-BUILDERS = {"cclf": cclf_tables, "humana": humana_tables}
+BUILDERS = {"cclf": cclf_tables, "ma_payer": ma_payer_tables}
 SILVER_OUTPUTS = {
     "cclf": ("beneficiary_versions", "claim_families"),
-    "humana": ("member_versions", "claim_families"),
+    "ma_payer": ("member_versions", "claim_families"),
 }
 
 

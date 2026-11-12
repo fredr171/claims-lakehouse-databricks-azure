@@ -1,6 +1,6 @@
 """A payer's silver tables as data: what each table reads, how it is built, what it checks.
 
-Each payer's tables module (silver/cclf/tables.py, silver/humana/tables.py) lists its
+Each payer's tables module (silver/cclf/tables.py, silver/ma_payer/tables.py) lists its
 tables once, in build order. Two runtimes read that one list, so the wiring cannot drift
 between them:
 - locally, build_tables() calls each table's function on the DataFrames it reads;

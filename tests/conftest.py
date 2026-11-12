@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 from harness import FIRST_MONTH, LAST_MONTH, LocalArchive, months
-from synthetic_payer_files import generate_cclf, generate_humana
+from synthetic_payer_files import generate_cclf, generate_ma_payer
 
 from claims_lakehouse.config import load_config
 
@@ -54,18 +54,18 @@ def spark():
 def generated(tmp_path_factory) -> Path:
     """All 36 months from both generators (seed 42), plus answer keys under key/.
 
-    Layout: cms/YYYY-MM/CCLF*.csv, humana/YYYY-MM/HUM_*.csv, key/, key/humana/.
+    Layout: cms/YYYY-MM/CCLF*.csv, ma_payer/YYYY-MM/MAP_*.csv, key/, key/ma_payer/.
     """
     root = tmp_path_factory.mktemp("generated")
     month_args = ["--seed", "42", "--start", FIRST_MONTH, "--end", LAST_MONTH]
     generate_cclf.main(
         [*month_args, "--output-dir", str(root / "cms"), "--answer-key-dir", str(root / "key")]
     )
-    generate_humana.main(
+    generate_ma_payer.main(
         [
             *month_args,
-            "--output-dir", str(root / "humana"),
-            "--answer-key-dir", str(root / "key" / "humana"),
+            "--output-dir", str(root / "ma_payer"),
+            "--answer-key-dir", str(root / "key" / "ma_payer"),
             "--crossover-dir", str(root / "key"),
         ]
     )  # fmt: skip

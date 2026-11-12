@@ -1,4 +1,4 @@
-"""Humana claim families, on hand-built claim versions.
+"""MA payer claim families, on hand-built claim versions.
 
 Every scenario is its own family in one table, built once: one Spark query for the
 whole module instead of one per test.
@@ -9,7 +9,7 @@ from decimal import Decimal
 
 import pytest
 
-from claims_lakehouse.silver.humana.claim_families import claim_families, claim_versions
+from claims_lakehouse.silver.ma_payer.claim_families import claim_families, claim_versions
 
 VERSIONS = (
     "claim_family_key string, claim_id string, claim_frequency_code string, "

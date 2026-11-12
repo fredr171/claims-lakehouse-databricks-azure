@@ -143,7 +143,7 @@ def test_path_outside_every_feed_is_not_a_delivery(config):
         (f"cms/cclf/{FILE_NAME}", "landing_path", "expected cms/cclf/<file_type>/<file_name>"),
         (f"cms/cclf/claims_diagnosis/x/{FILE_NAME}", "landing_path", "<file_type>/<file_name>"),
         (f"cms/cclf/diagnosis/{FILE_NAME}", "known_file_type", "no file type 'diagnosis'"),
-        (f"humana/ma/claims_diagnosis/{FILE_NAME}", "known_file_type", "in feed 'humana'"),
+        (f"ma_payer/ma/claims_diagnosis/{FILE_NAME}", "known_file_type", "in feed 'ma_payer'"),
     ],
 )
 def test_unknown_location_fails_and_skips_the_rest(config, path, failed, message):
@@ -187,8 +187,10 @@ SHA = "ab" * 32
 
 def test_layout_paths():
     assert archive_path(
-        "humana/ma/", "member_eligibility", "2025-12", SHA, "HUM_ELIG_202512.csv"
-    ) == (f"humana/ma/member_eligibility/delivery_month=2025-12/checksum={SHA}/HUM_ELIG_202512.csv")
+        "ma_payer/ma/", "member_eligibility", "2025-12", SHA, "MAP_ELIG_202512.csv"
+    ) == (
+        f"ma_payer/ma/member_eligibility/delivery_month=2025-12/checksum={SHA}/MAP_ELIG_202512.csv"
+    )
     assert quarantine_path(LANDING, SHA) == f"cms/cclf/claims_diagnosis/checksum={SHA}/{FILE_NAME}"
     assert error_report_path(LANDING, SHA) == quarantine_path(LANDING, SHA) + ".error.json"
 

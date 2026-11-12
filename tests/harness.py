@@ -99,7 +99,7 @@ class LocalArchive:
         self,
         generated: Path,
         month: str,
-        feeds: tuple[str, ...] = ("cclf", "humana"),
+        feeds: tuple[str, ...] = ("cclf", "ma_payer"),
         replace: dict[str, Path] | None = None,
     ) -> list[ValidationResult]:
         """Deliver every generated file of a month for the given feeds.
@@ -152,7 +152,7 @@ class LocalArchive:
         return with_lineage(parsed, ft, F.col("source_file"), F.col("archived_at"))
 
 
-_GENERATED_DIRS = {"cclf": "cms", "humana": "humana"}
+_GENERATED_DIRS = {"cclf": "cms", "ma_payer": "ma_payer"}
 
 
 def generated_file(config: LakehouseConfig, generated: Path, file_type: str, month: str) -> Path:

@@ -60,28 +60,28 @@ resources:
           pipeline_task:
             pipeline_id: ${resources.pipelines.silver_cclf.id}
 
-        # --- Humana MA ---------------------------------------------------------------------
-        - task_key: prepare_humana
+        # --- MA payer ---------------------------------------------------------------------
+        - task_key: prepare_ma_payer
           depends_on: [{ task_key: bronze }]
           environment_key: default
           spark_python_task:
             python_file: ../src/jobs/prepare_payer.py
-            parameters: [--src, "${workspace.file_path}/src", --catalog, "${var.catalog}", --feed, humana]
-        - task_key: full_refresh_humana
-          depends_on: [{ task_key: prepare_humana }]
+            parameters: [--src, "${workspace.file_path}/src", --catalog, "${var.catalog}", --feed, ma_payer]
+        - task_key: full_refresh_ma_payer
+          depends_on: [{ task_key: prepare_ma_payer }]
           condition_task:
             op: EQUAL_TO
-            left: "{{tasks.prepare_humana.values.full_refresh}}"
+            left: "{{tasks.prepare_ma_payer.values.full_refresh}}"
             right: "true"
-        - task_key: silver_humana_full_refresh
-          depends_on: [{ task_key: full_refresh_humana, outcome: "true" }]
+        - task_key: silver_ma_payer_full_refresh
+          depends_on: [{ task_key: full_refresh_ma_payer, outcome: "true" }]
           pipeline_task:
-            pipeline_id: ${resources.pipelines.silver_humana.id}
+            pipeline_id: ${resources.pipelines.silver_ma_payer.id}
             full_refresh: true
-        - task_key: silver_humana
-          depends_on: [{ task_key: full_refresh_humana, outcome: "false" }]
+        - task_key: silver_ma_payer
+          depends_on: [{ task_key: full_refresh_ma_payer, outcome: "false" }]
           pipeline_task:
-            pipeline_id: ${resources.pipelines.silver_humana.id}
+            pipeline_id: ${resources.pipelines.silver_ma_payer.id}
 
         # --- Gold and the answer keys ------------------------------------------------------
         - task_key: gold
@@ -91,8 +91,8 @@ resources:
           depends_on:
             - task_key: silver_cclf
             - task_key: silver_cclf_full_refresh
-            - task_key: silver_humana
-            - task_key: silver_humana_full_refresh
+            - task_key: silver_ma_payer
+            - task_key: silver_ma_payer_full_refresh
           environment_key: default
           spark_python_task:
             python_file: ../src/jobs/publish_gold.py
@@ -124,6 +124,6 @@ resources:
               - --pipeline
               - "cclf=${resources.pipelines.silver_cclf.id}"
               - --pipeline
-              - "humana=${resources.pipelines.silver_humana.id}"
+              - "ma_payer=${resources.pipelines.silver_ma_payer.id}"
               - --secret-scope
               - "${var.notifier_secret_scope}"

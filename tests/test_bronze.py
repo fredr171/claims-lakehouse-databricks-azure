@@ -32,8 +32,8 @@ def fixture(case: str):
             SHA,
         ),
         (
-            f"file:///C:/tmp/archive/humana/ma/member_eligibility/"
-            f"delivery_month=2025-12/checksum={SHA}/HUM_ELIG_202512.csv",
+            f"file:///C:/tmp/archive/ma_payer/ma/member_eligibility/"
+            f"delivery_month=2025-12/checksum={SHA}/MAP_ELIG_202512.csv",
             "2025-12",
             SHA,
         ),
@@ -61,7 +61,8 @@ def test_lineage_from_archive_path(spark, config, path, month, checksum):
 
 def test_bronze_table_name(config):
     assert (
-        bronze_table_name(config.file_types["medical_claim_lines"]) == "humana_medical_claim_lines"
+        bronze_table_name(config.file_types["medical_claim_lines"])
+        == "ma_payer_medical_claim_lines"
     )
 
 

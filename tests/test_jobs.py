@@ -40,13 +40,13 @@ def test_only_feeds_with_every_conformed_view_are_published(config):
         "cat.silver_cclf.conformed_coverage",
         "cat.silver_cclf.conformed_claims",
         "cat.silver_cclf.conformed_deliveries",
-        "cat.silver_humana.conformed_coverage",  # humana only part-way through
+        "cat.silver_ma_payer.conformed_coverage",  # ma_payer only part-way through
     }
     assert published_feeds(config, "cat", existing.__contains__) == {"cclf"}
 
 
 def test_gold_statements_publish_every_mart_into_the_gold_schema(config):
-    statements = gold_statements(config, "cat", {"cclf", "humana"})
+    statements = gold_statements(config, "cat", {"cclf", "ma_payer"})
     assert list(statements) == [*MARTS, *CHECKS]
     for name, sql in statements.items():
         kind = "TABLE" if name in MARTS else "VIEW"
@@ -54,11 +54,11 @@ def test_gold_statements_publish_every_mart_into_the_gold_schema(config):
         assert "${" not in sql, name
     for name in MARTS + CHECKS:
         for table in re.findall(r"\bcat\.(\w+)\.(\w+)", statements[name]):
-            assert table[0] in {"gold", "silver_cclf", "silver_humana"}, (name, table)
+            assert table[0] in {"gold", "silver_cclf", "silver_ma_payer"}, (name, table)
 
 
 def test_an_unpublished_feed_is_left_out_of_gold(config):
     statements = gold_statements(config, "cat", {"cclf"})
     text = "\n".join(statements.values())
     assert "cat.silver_cclf.conformed_claims" in text
-    assert "silver_humana" not in text
+    assert "silver_ma_payer" not in text

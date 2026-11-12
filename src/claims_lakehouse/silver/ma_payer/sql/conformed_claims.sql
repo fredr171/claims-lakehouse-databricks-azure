@@ -1,4 +1,4 @@
--- Humana MA claims in the conformed contract (claims_lakehouse.gold.contract): one row per
+-- MA payer claims in the conformed contract (claims_lakehouse.gold.contract): one row per
 -- claim family. Gold unions it with every registered payer's.
 --
 -- Mapping: claim form I -> INSTITUTIONAL, P -> PROFESSIONAL. Status ORIGINAL -> PAID,

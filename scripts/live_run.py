@@ -34,7 +34,7 @@ from claims_lakehouse.checks.answer_keys import write_member_month_keys  # noqa:
 from claims_lakehouse.config import load_config  # noqa: E402
 
 OUTPUT = REPO / "output"
-GENERATED_DIRS = {"cclf": "cms", "humana": "humana"}
+GENERATED_DIRS = {"cclf": "cms", "ma_payer": "ma_payer"}
 SEED, FIRST_MONTH, LAST_MONTH = "42", "2023-01", "2025-12"
 
 
@@ -48,20 +48,20 @@ def terraform_output(name: str) -> str:
 
 
 def generate() -> None:
-    from synthetic_payer_files import generate_cclf, generate_humana
+    from synthetic_payer_files import generate_cclf, generate_ma_payer
 
     if OUTPUT.exists():
         shutil.rmtree(OUTPUT)
     months = ["--seed", SEED, "--start", FIRST_MONTH, "--end", LAST_MONTH]
     key = OUTPUT / "key"
     generate_cclf.main([*months, "--output-dir", str(OUTPUT / "cms"), "--answer-key-dir", str(key)])
-    generate_humana.main(
+    generate_ma_payer.main(
         [
             *months,
             "--output-dir",
-            str(OUTPUT / "humana"),
+            str(OUTPUT / "ma_payer"),
             "--answer-key-dir",
-            str(key / "humana"),
+            str(key / "ma_payer"),
             "--crossover-dir",
             str(key),
         ]
