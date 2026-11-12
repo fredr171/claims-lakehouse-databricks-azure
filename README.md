@@ -11,7 +11,7 @@ its **answer keys** (the exact results a correct pipeline produces) exactly. The
 decisions are the same; the stack is platform-native. Where this repo differs, the reason is
 below. All data is synthetic.
 
-> **Status:** phases 1 and 2 are done.
+> **Status:** all four phases are done.
 > - **Phase 1:** config, file validation, silver and gold logic, and tests against both
 >   answer keys, all running locally on PySpark.
 > - **Phase 2:** Terraform for storage, Event Grid, the validation Function, Key Vault and
@@ -19,8 +19,14 @@ below. All data is synthetic.
 >   quarantined with its report, a repeat is a duplicate, and the archive refuses deletes.
 >   `infra/teardown.ps1` removes all of it.
 >
-> Databricks pipelines and jobs (phase 3), and the notifier, CI and dashboard (phase 4)
-> come next.
+> - **Phase 3:** Unity Catalog, the bronze and per-payer pipelines, gold and the job.
+>   Verified live on serverless: gold matches both answer keys for all 36 months, and a
+>   corrected re-send takes the full-refresh path and still matches.
+> - **Phase 4:** the notifier and GitHub issues, the provided file-events queue for the
+>   trigger, CI with an OIDC deploy, and the dashboard. Verified live: every delivery
+>   started its run through the trigger; a duplicate-key delivery stopped CCLF while
+>   Humana refreshed, opened an issue, and a corrected re-send closed it; a quarantined
+>   file opened an alert issue; and after all 36 months gold matched both answer keys.
 
 **Stack:** Python 3.12, PySpark 4 (Databricks serverless), Lakeflow Declarative Pipelines,
 Auto Loader, Unity Catalog, Azure Functions, Event Grid, ADLS Gen2, Terraform, Databricks
@@ -39,8 +45,9 @@ flowchart LR
     bronze --> hum["Humana pipeline<br/>silver + conformed views"]
     cms --> gold[("gold marts<br/>SQL, Unity Catalog")]
     hum --> gold
-    gold --> check["Answer-key check"]
-    fn & check --> notifier["Notifier Function"] --> issues["GitHub issues"]
+    gold --> check["Answer-key check"] --> outcome["Run outcome<br/>per feed"]
+    outcome --> notifier["Notifier Function"] --> issues["GitHub issues"]
+    fn -.->|"Azure Monitor alerts"| notifier
 ```
 
 | Layer | Where | What it holds |
@@ -239,18 +246,23 @@ The job is a Databricks Asset Bundle (`databricks.yml`, `resources/`):
 ```
 file arrives ─► create_masks ─► bronze ─┬─► prepare_cclf ──► full refresh? ─► silver_cclf ───┐
 in archive                              └─► prepare_humana ► full refresh? ─► silver_humana ─┴─► gold ─► answer_keys
+                                                                                                        │
+                                                                         report_outcome (always) ◄──────┘
 ```
 
 - **File-arrival trigger on the archive**, so the job sees only validated files. It waits
   for a quiet period before starting, so one month's files usually make one run. One run at
   a time.
-  **Open issue (first live run):** the trigger has not fired yet. Unity Catalog turns
-  **file events** on for new external locations, and the trigger then reads them instead of
-  listing the archive. The first setup failed (403 creating the queue) because the access
-  connector lacked the roles Databricks needs. Terraform now grants those roles and
-  declares the file events with a managed queue. Databricks accepted that, but the queue
-  stayed "being provisioned" for over 30 minutes and never appeared in Azure. The live
-  runs were started by hand; to be resolved in phase 4.
+  The trigger reads Unity Catalog **file events** on the archive rather than listing it.
+  **Terraform provides the queue** (`eventgrid.tf`): the lake's Event Grid system topic sends
+  the archive's blob events to a storage queue, and the access connector may only read that
+  one queue. In its automatic mode Databricks creates the subscription and queue itself,
+  which needs Storage Account Contributor on the lake. In the first live run that setup
+  failed with a storage `AuthorizationFailure` and then stayed "being provisioned"; the
+  likely cause is that it uses account keys, which this account disables. Providing the
+  queue removes both management roles and the dependency on keys. In the phase 4 live run
+  all four deliveries (two batches, a broken file and its re-send) started a run this way,
+  a few minutes after the last file arrived.
 - **Gold runs even when a payer stopped** (`run_if: ALL_DONE`): the stopped payer's tables
   keep their last good update, and the run still ends failed.
 - **The last task compares gold with the answer keys** (`claims_lakehouse/checks/`) and
@@ -263,6 +275,8 @@ in archive                              └─► prepare_humana ► full refres
   workspace and every Unity Catalog object (storage credential, external locations,
   catalog, schemas, the answer-key volume, the runner service principal, the PII readers
   group, and the runner's grants); the bundle owns only code-level resources.
+- **The last task reports the outcome to the notifier** (always runs: `run_if: ALL_DONE`).
+  See [the notifier](#7-notifier-one-github-issue-per-problem).
 - **The runner has only what it needs:**
   - read files on the archive (nothing can write it);
   - create and refresh tables in the data schemas;
@@ -286,11 +300,20 @@ in archive                              └─► prepare_humana ► full refres
   redeployed, and failed deliveries go to a dead-letter container. On an ADLS Gen2 account
   a file is created empty and then flushed, so the subscription passes only the calls that
   finish a file (`FlushWithClose`, `PutBlob`, `PutBlockList`, `CopyBlob`).
-- **The validation Function runs on Flex Consumption** (Python 3.12), billed per execution.
-  The app is defined with the `azapi` provider: azurerm's Flex Consumption resource always
+- **Both Functions run on Flex Consumption** (Python 3.12), billed per execution, one
+  plan each (Flex allows one app per plan). The apps are defined with the `azapi` provider: azurerm's Flex Consumption resource always
   adds a key-based `AzureWebJobsStorage` connection string
   ([hashicorp/terraform-provider-azurerm#29149](https://github.com/hashicorp/terraform-provider-azurerm/issues/29149)),
   which a keyless storage account rejects.
+- **CI and deployment** (`.github/workflows/`):
+  - **`ci`** runs on every pull request: ruff, `terraform fmt` and `validate`, and the fast
+    tests on a local Spark session. No Azure access.
+  - **`deploy`** is started by hand and deploys code only: both Functions and the bundle. It
+    signs in with **OIDC**: GitHub issues a short-lived token for a run in the `dev`
+    environment, and a federated credential on an Entra ID application
+    (`github_oidc.tf`) trusts it, so no Azure secret is stored in GitHub. That identity may
+    zip-deploy the two Function apps and deploy the bundle, and nothing else.
+    Infrastructure stays a reviewed local `terraform apply`.
 - **Kept inside a ~$25/month budget:**
   - **Serverless compute** for jobs, pipelines and SQL.
   - **No NAT gateway in Databricks.** Classic clusters get public IPs (with no inbound ports
@@ -300,6 +323,70 @@ in archive                              └─► prepare_humana ► full refres
   - **A daily cap on Log Analytics.**
   - **Key Vault without purge protection,** so the environment can be destroyed and
     rebuilt under the same names.
+
+### 7. Notifier: one GitHub issue per problem
+Every job run and every Azure Monitor alert reaches the notifier Function, which keeps one
+GitHub issue per problem: it opens the issue, comments while the problem persists, and
+closes it when a later run or alert passes that check.
+
+- **Job runs:** the job's last task (`report_outcome`, always run) classifies the run per
+  feed (`claims_lakehouse/jobs/outcome.py`) from its task states, each payer's pipeline
+  event log and the answer-key result, and posts the report:
+  - **warned:** a warn or drop expectation failed rows;
+  - **stopped:** a stop expectation failed the payer's update (its tables keep their last
+    good version);
+  - **error:** any other failed task, or gold differing from the answer keys.
+  The task then fails the run if anything stopped or errored, so a run is never marked as
+  succeeded because its last task passed.
+- **Issues are keyed by the feed the failing check reads**, plus the source and the check
+  (`job/cclf/expectation/keys_unique`), in a hidden marker in the issue body. A run closes
+  only issues for checks it ran to completion: a run that failed in bronze leaves the
+  payers' issues open, and one payer recovering never closes the other's.
+- **Azure Monitor alerts** (common alert schema, through an action group):
+  - **quarantined files:** one alert per feed (a log alert split by the `feed` the
+    validation Function logs). It does not resolve itself, because a quiet window does not
+    mean the payer re-sent the file;
+  - **validation Function failures:** resolves itself after a clean window, which closes
+    the issue.
+- **Identifiers and counts only.** Pipeline errors can quote rows, so only expectation names
+  are taken from them, by pattern; alert IDs (which contain the subscription) are dropped.
+- **Credentials:** the GitHub token is a fine-grained token with issue access to this
+  repository only, stored in Key Vault and read through a Key Vault reference. The job finds
+  the notifier's URL, with its function key, in a Databricks secret scope that only the
+  runner can read.
+- **No retries for a stop.** A stop is a data problem, so retrying cannot fix it. The
+  live run showed serverless retrying twice over: the stopped pipeline update four times
+  (about ten billed minutes), and `report_outcome`, which fails on purpose, once (a second
+  "still stopped" comment). The silver pipelines set `pipelines.numUpdateRetryAttempts: 0`
+  and the task sets `max_retries: 0`; the job's run repair covers a transient failure.
+
+The live run: `scripts/live_run.py break claims_header 2023-06` sent a file with a
+duplicated row. It passed file validation, CCLF stopped on `keys_unique` while Humana
+refreshed, gold still ran, and the run failed:
+
+![The stopped run: silver_cclf failed, silver_humana and gold succeeded, report_outcome failed the run](docs/images/job-run-stopped.png)
+
+The notifier opened an issue, and `resend` (the same records, a new checksum) closed it.
+The duplicate "still stopped" comment is the retry described above:
+
+![Issue #6: opened by the stopped run, closed by the run after the re-send](docs/images/issue-stopped-recovered.png)
+
+A file with a byte-order mark was quarantined, and the alert opened an issue for its feed.
+It stays open until someone closes it, once the payer has re-sent the file:
+
+![Issue #7: the files-quarantined alert for the cclf feed](docs/images/issue-files-quarantined.png)
+
+### 8. Dashboard and saved queries
+- **Saved queries** (`queries/`): PMPM by payer and month, member months, payer switchers,
+  the claim status mix and payer deliveries, in Databricks SQL over gold.
+- **An AI/BI dashboard** (`resources/dashboards/`), deployed with the bundle, on the
+  workspace's serverless starter warehouse. Its datasets are the saved queries verbatim,
+  and viewers query with their own permissions (`embed_credentials: false`).
+- **Tested like the rest:** every saved query runs on the local gold built from the 36
+  months and agrees with the answer keys (17 switchers; member months match `agg_payer_monthly`),
+  and a test fails if a dashboard dataset drifts from its saved query.
+
+![The dashboard after all 36 months: 2 payers, 17 switchers, PMPM, member months and claim statuses](docs/images/dashboard.png)
 
 ## Testing
 
@@ -336,6 +423,9 @@ deliberately broken data:
   - the pipeline's supersession count agrees with the job's count;
   - the answer-key check passes on the full load and reports each of five kinds of broken
     gold.
+- **Notifier:** the issue lifecycle on a fake tracker (open, comment, close; scope rules;
+  alert and job issues kept apart), classifying runs per feed, and the GitHub client against
+  a fake API.
 - **Mutation checks:** during development, breaking a rule (adjustment netting, terminations,
   the active-version rule, status mappings, the any-day member-month rule, delivery ordering)
   was confirmed to fail the tests.
@@ -373,14 +463,44 @@ terraform apply      # creates billable resources
 cd ../..; ./infra/teardown.ps1   # between live runs: destroy, plus the Databricks leftovers
 ```
 
-Deploy the validation Function after `apply` (dependencies install in a remote build):
+Deploy both Functions after `apply` (dependencies install in a remote build):
 
 ```powershell
-./functions/validation/build.ps1
-$fn = terraform -chdir=infra/terraform output -raw validation_function_name
-az functionapp deployment source config-zip -g rg-claims-lakehouse-dev -n $fn `
-    --src build/validation.zip --build-remote true
+foreach ($app in 'validation', 'notifier') {
+    ./functions/build.ps1 -App $app
+    $fn = terraform -chdir=infra/terraform output -raw "${app}_function_name"
+    az functionapp deployment source config-zip -g rg-claims-lakehouse-dev -n $fn `
+        --src "build/$app.zip" --build-remote true
+}
 ```
+
+The notifier needs a GitHub token in Key Vault: a fine-grained personal access token for
+this repository only, with read and write access to issues. Paste it when prompted, so it
+never appears in the shell history:
+
+```powershell
+$kv = terraform -chdir=infra/terraform output -raw key_vault_name
+$name = terraform -chdir=infra/terraform output -raw github_token_secret
+$token = Read-Host -AsSecureString 'GitHub token'
+az keyvault secret set --vault-name $kv -n $name --value ([pscredential]::new('x', $token).GetNetworkCredential().Password) -o none
+```
+
+### Deploying from GitHub
+
+After `terraform apply`, the `deploy` workflow can replace the manual Function and bundle
+deploys. Create a `dev` environment in the repository settings and set its variables from
+Terraform (none are secrets; none are committed):
+
+| Variable | Value |
+|---|---|
+| `AZURE_CLIENT_ID` | `terraform output -raw github_deploy_client_id` |
+| `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | `az account show --query "[tenantId, id]"` |
+| `RESOURCE_GROUP` | `terraform output -raw resource_group_name` |
+| `VALIDATION_FUNCTION`, `NOTIFIER_FUNCTION` | `terraform output -raw validation_function_name` / `notifier_function_name` |
+| `DATABRICKS_HOST` | `terraform output -raw databricks_workspace_url` |
+| `ARCHIVE_URL`, `RUNNER_APPLICATION_ID` | `terraform output -raw archive_url` / `runner_application_id` |
+
+Then run it with `gh workflow run deploy`.
 
 ### Databricks
 
@@ -388,7 +508,7 @@ Requires the Databricks CLI (`winget install Databricks.DatabricksCLI`). It sign
 the Azure CLI login, and takes the workspace and archive from the environment:
 
 ```powershell
-$env:DATABRICKS_HOST = "https://" + (terraform -chdir=infra/terraform output -raw databricks_workspace_url)
+$env:DATABRICKS_HOST = terraform -chdir=infra/terraform output -raw databricks_workspace_url
 $env:BUNDLE_VAR_archive_url = terraform -chdir=infra/terraform output -raw archive_url
 $env:BUNDLE_VAR_runner_application_id = terraform -chdir=infra/terraform output -raw runner_application_id
 databricks bundle validate

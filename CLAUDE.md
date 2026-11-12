@@ -108,6 +108,8 @@ check → job outcomes go to the **notifier Azure Function** → GitHub issues.
   A stop must leave previously published silver and gold intact: every published table of a
   payer depends on that payer's gate tables, so a failed expectation blocks the whole payer.
   Row expectations check formats on the delivered text, before typing (`try_cast` is lenient).
+  Nothing retries a stop: the silver pipelines set `pipelines.numUpdateRetryAttempts: 0` and
+  `report_outcome` sets `max_retries: 0` (the live run billed four retries of one stop).
 - **Member history (SCD type 2)** uses AUTO CDC with `SEQUENCE BY` delivery month plus archive
   time (`_archived_at`) as a tiebreaker. Change type (new, update, termination) is derived, not trusted
   from the file.
@@ -140,6 +142,10 @@ check → job outcomes go to the **notifier Azure Function** → GitHub issues.
 
 ### Orchestration
 - A Lakeflow Job with a file-arrival trigger, max one concurrent run per payer feed.
+- The trigger reads Unity Catalog file events from a **queue Terraform provides** (Event Grid
+  subscription on the archive container → lake storage queue). Not Databricks' automatic
+  mode: it needs Storage Account Contributor and did not finish provisioning on a lake with
+  shared-key access disabled.
 - Final job task: compare gold against the answer keys and fail the run on mismatch.
 
 ### Notifier
@@ -148,7 +154,12 @@ check → job outcomes go to the **notifier Azure Function** → GitHub issues.
   it persists, close it on recovery. Key issues by the feed the **failing check** reads, not
   every feed the run built.
 - GitHub credentials (GitHub App or fine-grained token, issues scope on this repo only) live
-  in Key Vault.
+  in Key Vault. **Decided:** a fine-grained token, read through a Key Vault reference.
+- **Decided:** the job's last task (`report_outcome`, `run_if: ALL_DONE`) classifies the run
+  per feed and POSTs it to the notifier (URL with function key in a Databricks secret scope
+  only the runner reads), then fails the run on stopped or error. Alerts come through an
+  action group (common alert schema). Issues are keyed `source/feed/check` in a hidden body
+  marker; a report closes only issues for checks it ran to completion.
 
 ### Infrastructure and deployment
 - **Terraform** owns infrastructure: resource group, storage, Event Grid, Functions, Key Vault,

@@ -1,42 +1,46 @@
 <#
 .SYNOPSIS
-    Packages the validation Function into a zip for deployment.
+    Packages one of the Functions (validation or notifier) into a zip for deployment.
 
 .DESCRIPTION
-    Copies the Function files, the claims_lakehouse package and the config/ folder into
-    build/validation/, then zips them. Dependencies in requirements.txt are installed by
-    the remote build on deploy, so the zip holds only source.
+    Copies the Function's files (functions/<App>/), the claims_lakehouse package and the
+    config/ folder into build/<App>/, then zips them. Dependencies in requirements.txt are
+    installed by the remote build on deploy, so the zip holds only source.
 
 .EXAMPLE
-    ./functions/validation/build.ps1
+    ./functions/build.ps1 -App validation
     az functionapp deployment source config-zip -g rg-claims-lakehouse-dev `
         -n <function name> --src build/validation.zip --build-remote true
 #>
 [CmdletBinding()]
-param()
+param(
+    [Parameter(Mandatory)]
+    [ValidateSet('validation', 'notifier')]
+    [string] $App
+)
 
 $ErrorActionPreference = 'Stop'
 
-$repo = Resolve-Path (Join-Path $PSScriptRoot '..\..')
+$repo = Resolve-Path (Join-Path $PSScriptRoot '..')
+$source = Join-Path $PSScriptRoot $App
 $buildRoot = Join-Path $repo 'build'
-$staging = Join-Path $buildRoot 'validation'
-$zip = Join-Path $buildRoot 'validation.zip'
+$staging = Join-Path $buildRoot $App
+$zip = Join-Path $buildRoot "$App.zip"
 
 if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
 if (Test-Path $zip) { Remove-Item -Force $zip }
 New-Item -ItemType Directory -Force $staging | Out-Null
 
-foreach ($file in 'function_app.py', 'blob_store.py', 'host.json', 'requirements.txt') {
-    Copy-Item (Join-Path $PSScriptRoot $file) $staging
-}
-Copy-Item -Recurse (Join-Path $repo 'src\claims_lakehouse') $staging
+Get-ChildItem $source -File | Copy-Item -Destination $staging
+Copy-Item -Recurse (Join-Path (Join-Path $repo 'src') 'claims_lakehouse') $staging
 Copy-Item -Recurse (Join-Path $repo 'config') $staging
 
 # No caches or compiled files in the package.
 Get-ChildItem $staging -Recurse -Directory -Filter '__pycache__' | Remove-Item -Recurse -Force
 
 # Not Compress-Archive: on Windows PowerShell 5.1 it writes entry names with backslashes,
-# which the Linux Functions host extracts as literal file names.
+# which the Linux Functions host extracts as literal file names. Works on Windows
+# PowerShell and on PowerShell 7 (the deploy workflow, on Linux).
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::Open($zip, 'Create')
 try {

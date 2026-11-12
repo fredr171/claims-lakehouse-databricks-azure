@@ -1,0 +1,3 @@
+# Installed by the remote build on deploy. claims_lakehouse itself is copied in by build.ps1.
+azure-functions>=1.21
+pyyaml>=6

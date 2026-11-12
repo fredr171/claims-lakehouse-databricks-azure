@@ -77,7 +77,11 @@ data "http" "workspace_config" {
   url = "https://${azurerm_databricks_workspace.main.workspace_url}/.well-known/databricks-config"
 }
 
-data "databricks_current_user" "deployer" {}
+# Read once the workspace exists: on a fresh environment the provider cannot sign in at
+# plan time.
+data "databricks_current_user" "deployer" {
+  depends_on = [azurerm_databricks_workspace.main]
+}
 
 resource "databricks_access_control_rule_set" "runner_users" {
   name = "accounts/${jsondecode(data.http.workspace_config.response_body).account_id}/servicePrincipals/${databricks_service_principal.runner.application_id}/ruleSets/default"
@@ -89,8 +93,12 @@ resource "databricks_access_control_rule_set" "runner_users" {
     role       = "roles/servicePrincipal.manager"
   }
 
+  # The deploy workflow's identity (github_oidc.tf) deploys the bundle too.
   grant_rules {
-    principals = [data.databricks_current_user.deployer.acl_principal_id]
-    role       = "roles/servicePrincipal.user"
+    principals = [
+      data.databricks_current_user.deployer.acl_principal_id,
+      databricks_service_principal.github_deploy.acl_principal_id,
+    ]
+    role = "roles/servicePrincipal.user"
   }
 }

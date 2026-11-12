@@ -25,3 +25,9 @@ variable "location" {
   type        = string
   default     = "centralus"
 }
+
+variable "github_repository" {
+  description = "owner/name of the repository the notifier opens issues in."
+  type        = string
+  default     = "fredr171/claims-lakehouse-databricks-azure"
+}

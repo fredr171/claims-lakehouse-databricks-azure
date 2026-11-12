@@ -36,4 +36,7 @@ def validate_landing_file(message: func.QueueMessage) -> None:
         log.info("not a landing BlobCreated event; skipped")
         return
     result = handle_landing_event(event, STORE, CONFIG)
-    log.info("validation %s", json.dumps(result.log_record()))
+    # The feed lets the quarantine alert raise one notifier issue per feed.
+    feed = CONFIG.feed_for_path(result.landing_path)
+    record = result.log_record() | {"feed": feed.name if feed else None}
+    log.info("validation %s", json.dumps(record))

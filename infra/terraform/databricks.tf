@@ -38,21 +38,10 @@ resource "azurerm_role_assignment" "access_connector_lake" {
   principal_id         = azurerm_databricks_access_connector.main.identity[0].principal_id
 }
 
-# File events: Unity Catalog turns them on for new external locations, and the job's
-# file-arrival trigger then reads them instead of listing the archive. Databricks creates
-# the Event Grid subscription and storage queue itself, which needs these roles (without
-# them every trigger check fails with a 403 on queue.create). Storage Account Contributor
-# is a broad management role on the lake account (it could re-enable shared-key access,
-# which `terraform plan` would show as drift); production would scope file events to a
-# dedicated account or supply its own queue.
-resource "azurerm_role_assignment" "access_connector_file_events" {
-  for_each = {
-    "Storage Account Contributor"             = azurerm_storage_account.lake.id
-    "Storage Queue Data Contributor"          = azurerm_storage_account.lake.id
-    "EventGrid EventSubscription Contributor" = azurerm_resource_group.main.id
-  }
-
-  scope                = each.value
-  role_definition_name = each.key
+# File events: Databricks reads (and deletes) messages from the archive queue that
+# Terraform provides (eventgrid.tf). Scoped to that one queue.
+resource "azurerm_role_assignment" "access_connector_archive_queue" {
+  scope                = azurerm_storage_queue.archive_events.id
+  role_definition_name = "Storage Queue Data Contributor"
   principal_id         = azurerm_databricks_access_connector.main.identity[0].principal_id
 }

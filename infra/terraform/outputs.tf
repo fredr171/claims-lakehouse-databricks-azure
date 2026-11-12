@@ -11,7 +11,16 @@ output "lake_dfs_endpoint" {
 }
 
 output "validation_function_name" {
-  value = azapi_resource.validation_function.name
+  value = azapi_resource.function["validation"].name
+}
+
+output "notifier_function_name" {
+  value = azapi_resource.function["notifier"].name
+}
+
+output "github_token_secret" {
+  description = "Key Vault secret to hold the notifier's GitHub token (set by hand)."
+  value       = local.github_token_secret
 }
 
 output "key_vault_name" {
@@ -45,4 +54,15 @@ output "runner_application_id" {
 output "pii_readers_group" {
   description = "Members see unmasked names, addresses and birth dates."
   value       = databricks_group.pii_readers.display_name
+}
+
+output "notifier_secret_scope" {
+  description = "Databricks secret scope with the notifier's job-outcome URL (bundle variable)."
+  value       = databricks_secret_scope.notifier.name
+}
+
+# GitHub environment variables for the deploy workflow (Settings -> Environments -> dev).
+output "github_deploy_client_id" {
+  description = "AZURE_CLIENT_ID for the deploy workflow."
+  value       = azuread_application.github_deploy.client_id
 }
