@@ -17,13 +17,26 @@ resource "azuread_service_principal" "github_deploy" {
   owners    = [data.azuread_client_config.current.object_id]
 }
 
+# GitHub's token names the owner and repository with their immutable IDs as well as their
+# names (repo:<owner>@<owner id>/<repo>@<repo id>:...), so a renamed or re-created
+# repository cannot inherit the trust. The IDs come from GitHub's public API, not the repo.
+data "http" "github_repository" {
+  url             = "https://api.github.com/repos/${var.github_repository}"
+  request_headers = { Accept = "application/vnd.github+json" }
+}
+
+locals {
+  github_repo    = jsondecode(data.http.github_repository.response_body)
+  github_subject = "repo:${local.github_repo.owner.login}@${local.github_repo.owner.id}/${local.github_repo.name}@${local.github_repo.id}"
+}
+
 resource "azuread_application_federated_identity_credential" "github_dev" {
   application_id = azuread_application.github_deploy.id
   display_name   = "github-${var.environment}"
   description    = "Deploy workflow runs in the ${var.environment} environment"
   audiences      = ["api://AzureADTokenExchange"]
   issuer         = "https://token.actions.githubusercontent.com"
-  subject        = "repo:${var.github_repository}:environment:${var.environment}"
+  subject        = "${local.github_subject}:environment:${var.environment}"
 }
 
 # Zip deploy to each Function app, nothing else in Azure.
