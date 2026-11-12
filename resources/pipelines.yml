@@ -34,6 +34,9 @@ resources:
       configuration:
         claims_lakehouse.feed: cclf
         claims_lakehouse.catalog: ${var.catalog}
+        # A stop is a data problem: retrying the update cannot fix it, and each retry is
+        # billed. The job's run repair covers a transient platform failure.
+        pipelines.numUpdateRetryAttempts: "0"
       environment:
         dependencies:
           - pyyaml>=6
@@ -51,6 +54,9 @@ resources:
       configuration:
         claims_lakehouse.feed: humana
         claims_lakehouse.catalog: ${var.catalog}
+        # A stop is a data problem: retrying the update cannot fix it, and each retry is
+        # billed. The job's run repair covers a transient platform failure.
+        pipelines.numUpdateRetryAttempts: "0"
       environment:
         dependencies:
           - pyyaml>=6
