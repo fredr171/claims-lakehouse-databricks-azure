@@ -27,17 +27,18 @@ from claims_lakehouse.jobs.gold_tables import gold_table  # noqa: E402
 keys = Path(f"/Volumes/{args.catalog}/ops/answer_keys")
 marts = {name: spark.read.table(gold_table(args.catalog, name)) for name in MARTS + CHECKS}
 
+# No sys.exit() for the early pass: serverless runs the script in IPython, which reports any
+# SystemExit, even exit code 0, as a failed task.
 if missing := missing_months(marts, keys):
     print(f"not every month delivered yet, months missing: {missing}; nothing compared")
     dbutils.jobs.taskValues.set("answer_keys", json.dumps({"status": "incomplete", **missing}))
-    sys.exit(0)
-
-problems = check_gold(marts, keys)
-dbutils.jobs.taskValues.set(
-    "answer_keys",
-    json.dumps({"status": "mismatch" if problems else "match",
-                "mismatches": [vars(p) for p in problems]}),
-)  # fmt: skip
-if problems:
-    raise AssertionError("gold differs from the answer keys:\n" + "\n".join(map(str, problems)))
-print("gold matches the answer keys")
+else:
+    problems = check_gold(marts, keys)
+    dbutils.jobs.taskValues.set(
+        "answer_keys",
+        json.dumps({"status": "mismatch" if problems else "match",
+                    "mismatches": [vars(p) for p in problems]}),
+    )  # fmt: skip
+    if problems:
+        raise AssertionError("gold differs from the answer keys:\n" + "\n".join(map(str, problems)))
+    print("gold matches the answer keys")
