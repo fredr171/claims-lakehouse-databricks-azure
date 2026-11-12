@@ -28,6 +28,10 @@ from claims_lakehouse.silver.common import AMOUNT
 
 ORIGINAL, CANCELLATION, ADJUSTMENT = "0", "1", "2"
 FAMILY_KEY = ("part", "claim_control_number")
+# Part B version (CCLF5 line rollup) key, and the columns it takes from any one line. Every
+# line of a version must agree on them: the part_b_version_check gate table stops otherwise.
+PART_B_VERSION_KEY = ("claim_control_number", "claim_id")
+PART_B_LINE_AGREED_COLUMNS = ("beneficiary_mbi", "adjustment_type_code")
 _VERSION_COLUMNS = (
     "part",
     "claim_control_number",
@@ -54,6 +58,7 @@ def claim_versions(claims_header: DataFrame, part_b_lines: DataFrame) -> DataFra
         F.col("_delivery_month").alias("delivery_month"),
         F.col("payment_amount").alias("paid_amount"),
     )
+    # F.first is safe: every line of a version agrees on these (part_b_version_check).
     part_b = part_b_lines.groupBy(
         "claim_control_number", "claim_id", F.col("_delivery_month").alias("delivery_month")
     ).agg(

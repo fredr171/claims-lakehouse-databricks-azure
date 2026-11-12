@@ -16,7 +16,8 @@ The file's structure (header, field counts, non-empty keys) is already guarantee
 file-level validation.
 
 Some rules are not row-level: one odd line only warns, but many broken lines in a month
-mean a broken extract, and duplicate keys only show across rows. Those are gate tables,
+mean a broken extract, and duplicate keys or claim-version lines that disagree only show
+across rows. Those are gate tables,
 one row per delivery month, with WARN and FAIL expectations on their counts. A gate table
 reads every current delivery, so a bad month keeps failing every later update until a
 corrected re-send replaces it.
@@ -173,6 +174,39 @@ def duplicate_key_check(
 
 
 KEYS_UNIQUE = Expectation("keys_unique", "duplicate_key_rows = 0", Action.FAIL)
+
+_NULL = "<null>"  # stands for NULL, so a missing value counts as a different value
+
+
+def version_conflict_check(
+    lines: DataFrame, version_key: Sequence[str], columns: Sequence[str]
+) -> DataFrame:
+    """One row per delivery month: claim versions whose lines disagree on any of `columns`.
+
+    Line-level files roll up to one row per claim version, taking these columns from any
+    one line (F.first); that is only correct when every line of the version agrees. NULL
+    counts as a value, because F.first(ignorenulls=True) would otherwise hide it.
+    """
+    distinct = [
+        F.count_distinct(F.coalesce(F.col(c).cast("string"), F.lit(_NULL))).alias(f"_n_{c}")
+        for c in columns
+    ]
+    disagree = F.lit(False)
+    for c in columns:
+        disagree = disagree | (F.col(f"_n_{c}") > 1)
+    return (
+        lines.groupBy(MONTH, *version_key)
+        .agg(*distinct)
+        .select(MONTH, disagree.cast("long").alias("_conflict"))
+        .groupBy(MONTH)
+        .agg(
+            F.count(F.lit(1)).alias("version_count"),
+            F.sum("_conflict").alias("conflicting_versions"),
+        )
+    )
+
+
+VERSION_LINES_AGREE = Expectation("version_lines_agree", "conflicting_versions = 0", Action.FAIL)
 
 # A month stops when more than this share of its lines break a rule, and at least
 # RULE_BREAK_MIN_LINES do (so one odd line in a tiny file does not stop a payer).
