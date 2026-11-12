@@ -334,3 +334,15 @@ def test_github_create_comment_and_close_call_the_issues_api():
             fake.requests] == [("POST", "/issues"), ("POST", "/issues/7/comments"),
                                ("PATCH", "/issues/7")]  # fmt: skip
     assert fake.requests[-1][2] == {"state": "closed", "state_reason": "completed"}
+
+
+def test_a_repaired_task_counts_its_latest_attempt():
+    from claims_lakehouse.jobs.outcome import latest_states
+
+    attempts = [
+        ("answer_keys", 100, "FAILED"),
+        ("gold", 50, "SUCCESS"),
+        ("answer_keys", 200, "SUCCESS"),
+    ]
+    assert latest_states(attempts) == {"answer_keys": "SUCCESS", "gold": "SUCCESS"}
+    assert latest_states(reversed(attempts))["answer_keys"] == "SUCCESS"

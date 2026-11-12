@@ -23,6 +23,9 @@ variables:
   pii_readers_group:
     description: Sees unmasked names, addresses and birth dates (terraform output pii_readers_group)
     default: claims-lakehouse-pii-readers-dev
+  notifier_secret_scope:
+    description: Secret scope holding the notifier's job-outcome URL (terraform output notifier_secret_scope)
+    default: claims-lakehouse-notifier
 
 # The runner is in the PII readers group, so pipelines compute from unmasked values while
 # people querying the tables see masked ones. It also needs to read the synced code.

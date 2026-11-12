@@ -62,6 +62,18 @@ def violated_expectations(error_texts: Iterable[str]) -> tuple[str, ...]:
     return tuple(names)
 
 
+def latest_states(
+    attempts: Iterable[tuple[str, int | None, str | None]],
+) -> dict[str, str | None]:
+    """Task key -> result state from (task key, start time, result state) of every task
+    attempt. A repaired run lists a task once per attempt; the latest one counts."""
+    latest: dict[str, tuple[int, str | None]] = {}
+    for key, started, state in attempts:
+        if key not in latest or (started or 0) >= latest[key][0]:
+            latest[key] = (started or 0, state)
+    return {key: state for key, (_, state) in latest.items()}
+
+
 def _failed(state: str | None) -> bool:
     return state not in NOT_RUN and state != SUCCESS
 

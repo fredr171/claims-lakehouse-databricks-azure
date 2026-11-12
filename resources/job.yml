@@ -1,7 +1,7 @@
 # The lakehouse job: a file arriving in the archive starts it.
 #
 #   create_masks -> bronze -> per payer: prepare -> full refresh? -> silver (full or incremental)
-#          -> gold (runs even if a payer stopped) -> answer-key check
+#          -> gold (runs even if a payer stopped) -> answer-key check -> report outcome
 #
 # One run at a time, so a feed never has two runs in flight. Python tasks run on serverless.
 
@@ -103,3 +103,24 @@ resources:
           spark_python_task:
             python_file: ../src/jobs/check_answer_keys.py
             parameters: [--src, "${workspace.file_path}/src", --catalog, "${var.catalog}"]
+
+        # --- Outcome -----------------------------------------------------------------------
+        # Always runs, whatever failed before it, and sends the run's outcome to the
+        # notifier (GitHub issues). It fails the run if a payer stopped or a task errored.
+        - task_key: report_outcome
+          run_if: ALL_DONE
+          depends_on: [{ task_key: answer_keys }]
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/jobs/report_outcome.py
+            parameters:
+              - --src
+              - "${workspace.file_path}/src"
+              - --run-id
+              - "{{job.run_id}}"
+              - --pipeline
+              - "cclf=${resources.pipelines.silver_cclf.id}"
+              - --pipeline
+              - "humana=${resources.pipelines.silver_humana.id}"
+              - --secret-scope
+              - "${var.notifier_secret_scope}"
