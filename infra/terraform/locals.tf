@@ -3,22 +3,25 @@ locals {
 
   # Every resource name is defined here, once. Globally unique names carry the suffix.
   names = {
-    resource_group      = "rg-${local.project}-${var.environment}"
-    lake_storage        = "stclaimslakehouse${var.suffix}"
-    func_storage        = "stclaimsfunc${var.suffix}"
-    log_analytics       = "log-${local.project}-${var.environment}"
-    app_insights        = "appi-${local.project}-${var.environment}"
-    function_plan       = "asp-${local.project}-validation-${var.environment}"
-    validation_function = "func-${local.project}-validation-${var.suffix}"
-    event_grid_topic    = "evgt-${local.project}-lake-${var.environment}"
-    key_vault           = "kv-claimslake-${var.suffix}"
-    databricks          = "dbw-${local.project}-${var.environment}"
-    databricks_managed  = "rg-${local.project}-${var.environment}-databricks"
-    access_connector    = "dbac-${local.project}-${var.environment}"
-    storage_credential  = "claims_lakehouse_lake_${var.environment}"
-    catalog             = "claims_lakehouse_${var.environment}"
-    runner              = "${local.project}-runner-${var.environment}"
-    pii_readers         = "${local.project}-pii-readers-${var.environment}"
+    resource_group        = "rg-${local.project}-${var.environment}"
+    lake_storage          = "stclaimslakehouse${var.suffix}"
+    func_storage          = "stclaimsfunc${var.suffix}"
+    log_analytics         = "log-${local.project}-${var.environment}"
+    app_insights          = "appi-${local.project}-${var.environment}"
+    function_plan         = "asp-${local.project}" # + -<function>-<environment>
+    validation_function   = "func-${local.project}-validation-${var.suffix}"
+    notifier_function     = "func-${local.project}-notifier-${var.suffix}"
+    event_grid_topic      = "evgt-${local.project}-lake-${var.environment}"
+    key_vault             = "kv-claimslake-${var.suffix}"
+    databricks            = "dbw-${local.project}-${var.environment}"
+    databricks_managed    = "rg-${local.project}-${var.environment}-databricks"
+    access_connector      = "dbac-${local.project}-${var.environment}"
+    storage_credential    = "claims_lakehouse_lake_${var.environment}"
+    catalog               = "claims_lakehouse_${var.environment}"
+    runner                = "${local.project}-runner-${var.environment}"
+    pii_readers           = "${local.project}-pii-readers-${var.environment}"
+    notifier_secret_scope = "${local.project}-notifier"
+    notifier_action_group = "ag-${local.project}-notifier-${var.environment}"
   }
 
   # Unity Catalog privileges of the runner (runner.tf).
@@ -45,6 +48,9 @@ locals {
   func_deploy_container      = "app-package"
   landing_events_queue       = "landing-events"
   event_deadletter_container = "eventgrid-deadletter"
+
+  # The notifier's GitHub token in Key Vault (set by hand; see the README).
+  github_token_secret = "github-token"
 
   # In the lake account: archive events for Databricks file events.
   archive_events_queue = "archive-events"
