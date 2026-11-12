@@ -13,11 +13,13 @@ import shutil
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from pyspark.sql import functions as F
 
 from claims_lakehouse.checks.answer_keys import (
+    SWITCHERS,
     check_gold,
     expected_member_months,
     missing_months,
@@ -213,3 +215,30 @@ def test_the_job_check_reports_broken_gold(gold, keys, check):
     assert check in {p.check for p in problems}
     for problem in problems:  # counts only, never data values
         assert not re.search(r"\b[0-9][A-Z0-9]{10}\b|\d+\.\d{2}", str(problem)), problem
+
+
+# --- saved queries (queries/) ------------------------------------------------------------
+
+QUERIES = Path(__file__).resolve().parents[1] / "queries"
+
+
+def run_saved_query(spark, gold, name):
+    """A saved query against the local gold: the catalog and schema become temp views."""
+    for mart, df in gold.items():
+        df.createOrReplaceTempView(mart)
+    sql = (QUERIES / name).read_text(encoding="utf-8")
+    return spark.sql(sql.replace("claims_lakehouse_dev.gold.", "")).collect()
+
+
+@pytest.mark.parametrize("name", sorted(p.name for p in QUERIES.glob("*.sql")))
+def test_every_saved_query_runs_on_gold(spark, gold, name):
+    assert run_saved_query(spark, gold, name)
+
+
+def test_the_saved_queries_agree_with_the_answer_keys(spark, gold):
+    assert len(run_saved_query(spark, gold, "payer_switchers.sql")) == SWITCHERS
+    by_month = run_saved_query(spark, gold, "member_months_by_payer.sql")
+    pmpm = run_saved_query(spark, gold, "pmpm_by_payer_month.sql")
+    assert {(r.payer_id, r.month, r.member_months) for r in by_month} == {
+        (r.payer_id, r.month, r.member_months) for r in pmpm
+    }
