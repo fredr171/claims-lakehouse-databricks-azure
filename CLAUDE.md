@@ -6,7 +6,7 @@ Guidance for Claude Code in this repository. Read it fully before starting any t
 
 An event-driven claims lakehouse on Azure and Databricks, following a medallion architecture
 (landing → bronze → silver → gold). It processes monthly healthcare claims deliveries from two
-payers: CMS CCLF (Medicare fee-for-service) and Humana Medicare Advantage.
+payers: CMS CCLF (Medicare fee-for-service) and a fictional Medicare Advantage payer.
 
 It is the sibling of `fredr171/claims-lakehouse-dbt-duckdb` (AWS, Lambda, dbt-duckdb). Both
 repos use the same synthetic data from `fredr171/synthetic-payer-files`, and both must produce

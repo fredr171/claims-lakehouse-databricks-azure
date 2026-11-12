@@ -1,10 +1,10 @@
 """Stop vs warn gating across four job runs (months 2023-01 to 2023-04, both payers).
 
-run 1  01 clean; 02 with an odd CCLF claim end date      CCLF warned, Humana passed
-run 2  03 with a broken Humana claims extract             Humana stopped, CCLF refreshed
-run 3  04 clean Humana; 04 with a bad CCLF action code    both stopped (Humana still,
+run 1  01 clean; 02 with an odd CCLF claim end date      CCLF warned, MA payer passed
+run 2  03 with a broken MA payer claims extract             MA payer stopped, CCLF refreshed
+run 3  04 clean MA payer; 04 with a bad CCLF action code    both stopped (MA payer still,
                                                           blocked by 03)
-run 4  corrected re-sends of Humana 03 and CCLF 04        both recover; the result
+run 4  corrected re-sends of MA payer 03 and CCLF 04        both recover; the result
                                                           equals a clean load of the
                                                           same current files
 """
@@ -19,7 +19,7 @@ from claims_lakehouse.silver.quality import Action
 
 pytestmark = pytest.mark.slow
 
-CMS, HUMANA = "cms_ffs", "humana_ma"
+CMS, MA_PAYER = "cms_ffs", "ma_payer"
 
 
 def odd_claim_end_date(rows):
@@ -51,7 +51,7 @@ def run(spark, config, generated, tmp_path_factory):
         return generated_file(config, generated, file_type, month)
 
     warned = edited_copy(file("claims_header", "2023-02"), root / "warn", odd_claim_end_date)
-    broken_humana = edited_copy(
+    broken_ma_payer = edited_copy(
         file("medical_claim_lines", "2023-03"), root / "broken", paid_above_allowed
     )
     broken_cclf = edited_copy(
@@ -69,8 +69,8 @@ def run(spark, config, generated, tmp_path_factory):
             {
                 "outcomes": outcomes,
                 "gold": gold,
-                "humana_gold": gold.payer(HUMANA),
-                "humana_silver": snapshot(lakehouse.published[HUMANA]),
+                "ma_payer_gold": gold.payer(MA_PAYER),
+                "ma_payer_silver": snapshot(lakehouse.published[MA_PAYER]),
                 "windows": {row[payer]: row[last] for row in dim_payer},
             }
         )
@@ -78,11 +78,11 @@ def run(spark, config, generated, tmp_path_factory):
     archive.deliver_month(generated, "2023-01")
     archive.deliver_month(generated, "2023-02", replace={warned.name: warned})
     job_run()
-    archive.deliver_month(generated, "2023-03", replace={broken_humana.name: broken_humana})
+    archive.deliver_month(generated, "2023-03", replace={broken_ma_payer.name: broken_ma_payer})
     job_run()
     archive.deliver_month(generated, "2023-04", replace={broken_cclf.name: broken_cclf})
     job_run()
-    archive.deliver_generated(generated, "humana", "medical_claim_lines", "2023-03")
+    archive.deliver_generated(generated, "ma_payer", "medical_claim_lines", "2023-03")
     archive.deliver_generated(generated, "cclf", "claims_header", "2023-04")
     job_run()
 
@@ -94,7 +94,7 @@ def run(spark, config, generated, tmp_path_factory):
     reference.deliver_month(generated, "2023-04")
     clean = LocalLakehouse(spark, config, reference)
     clean.update()
-    return runs, snapshot(clean.gold), snapshot(clean.published[HUMANA]), lakehouse
+    return runs, snapshot(clean.gold), snapshot(clean.published[MA_PAYER]), lakehouse
 
 
 def statuses(run_):
@@ -103,7 +103,7 @@ def statuses(run_):
 
 def test_a_warn_does_not_block(run):
     runs, *_ = run
-    assert statuses(runs[0]) == {CMS: "warned", HUMANA: "passed"}
+    assert statuses(runs[0]) == {CMS: "warned", MA_PAYER: "passed"}
     [problem] = runs[0]["outcomes"][CMS].problems
     assert (problem.table, problem.expectation, problem.action, problem.failed_rows) == (
         "claims_header_current",
@@ -111,33 +111,33 @@ def test_a_warn_does_not_block(run):
         Action.WARN,
         1,
     )
-    assert runs[0]["windows"] == {CMS: _month(2), HUMANA: _month(2)}
+    assert runs[0]["windows"] == {CMS: _month(2), MA_PAYER: _month(2)}
 
 
 def test_a_stop_holds_back_its_payer_and_the_other_payer_still_refreshes(run):
     runs, *_ = run
-    assert statuses(runs[1]) == {CMS: "warned", HUMANA: "stopped"}
-    assert runs[1]["outcomes"][HUMANA].stopping == {"rules_mostly_hold"}
-    # Humana's silver and its slice of gold are exactly what run 1 published.
-    assert runs[1]["humana_silver"] == runs[0]["humana_silver"]
-    assert runs[1]["humana_gold"] == runs[0]["humana_gold"]
+    assert statuses(runs[1]) == {CMS: "warned", MA_PAYER: "stopped"}
+    assert runs[1]["outcomes"][MA_PAYER].stopping == {"rules_mostly_hold"}
+    # the MA payer's silver and its slice of gold are exactly what run 1 published.
+    assert runs[1]["ma_payer_silver"] == runs[0]["ma_payer_silver"]
+    assert runs[1]["ma_payer_gold"] == runs[0]["ma_payer_gold"]
     # CCLF moved on to 2023-03.
-    assert runs[1]["windows"] == {CMS: _month(3), HUMANA: _month(2)}
+    assert runs[1]["windows"] == {CMS: _month(3), MA_PAYER: _month(2)}
 
 
 def test_a_stop_keeps_blocking_later_months_until_a_resend(run):
     runs, *_ = run
-    assert statuses(runs[2]) == {CMS: "stopped", HUMANA: "stopped"}
-    assert runs[2]["outcomes"][HUMANA].stopping == {"rules_mostly_hold"}  # still 2023-03
+    assert statuses(runs[2]) == {CMS: "stopped", MA_PAYER: "stopped"}
+    assert runs[2]["outcomes"][MA_PAYER].stopping == {"rules_mostly_hold"}  # still 2023-03
     assert runs[2]["outcomes"][CMS].stopping == {"CLM_ADJSMT_TYPE_CD_domain"}
     assert runs[2]["gold"] == runs[1]["gold"]  # nothing new is published anywhere
 
 
 def test_corrected_resends_recover_to_a_clean_load(run):
-    runs, clean_gold, clean_humana, _ = run
-    assert statuses(runs[3]) == {CMS: "warned", HUMANA: "passed"}  # the 02 warn is current
-    assert runs[3]["windows"] == {CMS: _month(4), HUMANA: _month(4)}
-    assert runs[3]["humana_silver"] == clean_humana
+    runs, clean_gold, clean_ma_payer, _ = run
+    assert statuses(runs[3]) == {CMS: "warned", MA_PAYER: "passed"}  # the 02 warn is current
+    assert runs[3]["windows"] == {CMS: _month(4), MA_PAYER: _month(4)}
+    assert runs[3]["ma_payer_silver"] == clean_ma_payer
     assert runs[3]["gold"] == clean_gold
 
 

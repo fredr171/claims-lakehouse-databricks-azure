@@ -1,4 +1,4 @@
--- Humana current deliveries in the conformed contract (claims_lakehouse.gold.contract):
+-- MA payer current deliveries in the conformed contract (claims_lakehouse.gold.contract):
 -- one row per file type per delivery month. dim_payer takes the payer's delivery window
 -- from it.
 

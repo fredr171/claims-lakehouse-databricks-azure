@@ -28,12 +28,12 @@ from claims_lakehouse.checks.answer_keys import (
 from claims_lakehouse.gold.build import build_conformed, build_gold
 from claims_lakehouse.gold.marts import MARTS
 from claims_lakehouse.silver.cclf import tables as cclf_tables
-from claims_lakehouse.silver.humana import tables as humana_tables
+from claims_lakehouse.silver.ma_payer import tables as ma_payer_tables
 
 pytestmark = pytest.mark.slow
 
-PAYERS = {"cclf": "cms_ffs", "humana": "humana_ma"}
-KEY_FILES = {"cms_ffs": "key", "humana_ma": "key/humana"}
+PAYERS = {"cclf": "cms_ffs", "ma_payer": "ma_payer"}
+KEY_FILES = {"cms_ffs": "key", "ma_payer": "key/ma_payer"}
 # Columns that must never reach gold (they stay in silver, behind column masks).
 PROTECTED = {"first_name", "middle_name", "middle_initial", "last_name", "address_line_1",
              "city", "birth_date", "zip5_code", "zip9_code"}  # fmt: skip
@@ -42,7 +42,7 @@ PROTECTED = {"first_name", "middle_name", "middle_initial", "last_name", "addres
 @pytest.fixture(scope="module")
 def gold(spark, config, full_load):
     archive, _ = full_load
-    builders = {"cclf": cclf_tables, "humana": humana_tables}
+    builders = {"cclf": cclf_tables, "ma_payer": ma_payer_tables}
     bronze = {
         ft: archive.bronze(spark, ft).cache() for b in builders.values() for ft in b.FILE_TYPES
     }
@@ -73,7 +73,7 @@ def test_registry_payers_are_active_over_the_whole_window(gold):
             date(2025, 12, 1),
         )
     assert rows["cms_ffs"].current_file_count == 36 * 4
-    assert rows["humana_ma"].current_file_count == 36 * 2
+    assert rows["ma_payer"].current_file_count == 36 * 2
 
 
 @pytest.mark.parametrize("payer_id", list(PAYERS.values()))
@@ -100,17 +100,17 @@ def test_net_paid_by_service_month_matches_the_answer_key(gold, generated, payer
 
 
 def test_claim_statuses_are_conformed_across_payers(gold, generated):
-    """CANCELLED (CCLF) and VOIDED (Humana) are one status in gold, as are ADJUSTED and
+    """CANCELLED (CCLF) and VOIDED (MA payer) are one status in gold, as are ADJUSTED and
     REPLACED; the counts come from both payers' summaries."""
     cms = json.loads((generated / "key" / "summary.json").read_text(encoding="utf-8"))
-    hum = json.loads((generated / "key" / "humana" / "summary.json").read_text(encoding="utf-8"))
+    ma = json.loads((generated / "key" / "ma_payer" / "summary.json").read_text(encoding="utf-8"))
     counts = {
         r.claim_status: r["count"]
         for r in gold["fct_claims"].groupBy("claim_status").count().collect()
     }
-    assert counts["VOIDED"] == cms["cancellations"] + hum["voids"]
-    assert counts["ADJUSTED"] == cms["adjustments"] + hum["replacements"]
-    assert counts["DENIED"] == hum["denied"]
+    assert counts["VOIDED"] == cms["cancellations"] + ma["voids"]
+    assert counts["ADJUSTED"] == cms["adjustments"] + ma["replacements"]
+    assert counts["DENIED"] == ma["denied"]
     assert sum(counts.values()) == gold["fct_claims"].count()
 
 
@@ -122,7 +122,7 @@ def test_dim_member_matches_the_crossover_answer_key(gold, generated):
                       key=lambda r: r["effective_date"]):  # fmt: skip
         switches[row["BENE_MBI_ID"]].append(row)
     expected = {
-        mbi: (len(rows) + 1, "humana_ma" if rows[-1]["direction"] == "FFS_TO_MA" else "cms_ffs")
+        mbi: (len(rows) + 1, "ma_payer" if rows[-1]["direction"] == "FFS_TO_MA" else "cms_ffs")
         for mbi, rows in switches.items()
     }
     multi = gold["dim_member"].where("is_multi_payer").collect()
@@ -182,11 +182,11 @@ def test_the_job_check_waits_until_every_month_is_delivered(gold, keys):
     """Two months short for one payer: the check reports them missing (and compares nothing)."""
     short = gold["dim_payer"].withColumn(
         "last_delivery_month",
-        F.when(F.col("payer_id") == "humana_ma", F.lit("2025-10-01").cast("date")).otherwise(
+        F.when(F.col("payer_id") == "ma_payer", F.lit("2025-10-01").cast("date")).otherwise(
             F.col("last_delivery_month")
         ),
     )
-    assert missing_months({**gold, "dim_payer": short}, keys) == {"humana_ma": 2}
+    assert missing_months({**gold, "dim_payer": short}, keys) == {"ma_payer": 2}
 
 
 def _broken(gold, name, df):

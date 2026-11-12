@@ -17,14 +17,14 @@ from claims_lakehouse.bronze.lineage import bronze_table_name
 from claims_lakehouse.gold.build import build_conformed
 from claims_lakehouse.jobs.supersession import needs_full_refresh, superseded_deliveries
 from claims_lakehouse.silver.cclf import tables as cclf_tables
-from claims_lakehouse.silver.humana import tables as humana_tables
+from claims_lakehouse.silver.ma_payer import tables as ma_payer_tables
 from claims_lakehouse.silver.masks import PROTECTED, mask_function_statements, masked_schema
 from claims_lakehouse.silver.member_history import SEQUENCE_COLUMNS
 from claims_lakehouse.silver.quality import Action
 
 CATALOG = "cat"
-TABLES = {"cclf": cclf_tables, "humana": humana_tables}
-PAYERS = {"cclf": "cms_ffs", "humana": "humana_ma"}
+TABLES = {"cclf": cclf_tables, "ma_payer": ma_payer_tables}
+PAYERS = {"cclf": "cms_ffs", "ma_payer": "ma_payer"}
 LOADED_MONTHS = months("2023-01", "2023-04")
 
 
@@ -44,7 +44,7 @@ def archive(config, generated, tmp_path_factory):
     return archive
 
 
-@pytest.fixture(scope="module", params=["cclf", "humana"])
+@pytest.fixture(scope="module", params=["cclf", "ma_payer"])
 def payer(request, spark, config, archive):
     """(feed, the pipeline's definitions, what it built, the local build)."""
     feed = request.param
@@ -146,7 +146,7 @@ def test_without_the_gate_nothing_is_published(spark, payer):
 EXPECTED_MASKED = {
     "cclf": {"beneficiary_demographics_current", "stg_beneficiary_demographics",
              "beneficiary_versions", "beneficiary_versions_history"},
-    "humana": {"member_eligibility_current", "stg_member_eligibility",
+    "ma_payer": {"member_eligibility_current", "stg_member_eligibility",
                "member_versions", "member_versions_history"},
 }  # fmt: skip
 
@@ -216,7 +216,7 @@ MUST_BE_MASKED = {
     "cclf": {"first_name", "middle_name", "last_name", "address_line_1", "city", "zip5_code",
              "zip9_code", "birth_date", "BENE_1ST_NAME", "BENE_MIDL_NAME", "BENE_LAST_NAME",
              "BENE_LINE_1_ADR", "GEO_ZIP_PLC_NAME", "GEO_ZIP5_CD", "BENE_ZIP_CD", "BENE_DOB"},
-    "humana": {"first_name", "middle_initial", "last_name", "address_line_1", "city",
+    "ma_payer": {"first_name", "middle_initial", "last_name", "address_line_1", "city",
                "zip5_code", "birth_date", "FIRST_NAME", "MIDDLE_INITIAL", "LAST_NAME",
                "ADDRESS_LINE_1", "CITY", "ZIP", "DOB"},
 }  # fmt: skip

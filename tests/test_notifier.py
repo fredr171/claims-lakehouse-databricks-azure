@@ -13,8 +13,8 @@ from claims_lakehouse.notifier.github import GitHubIssues
 from claims_lakehouse.notifier.issues import LABEL, Issue, reconcile
 from claims_lakehouse.notifier.report import Problem, Report, Status, covers
 
-FEEDS = ["cclf", "humana"]
-PAYER_FEEDS = {"cms_ffs": "cclf", "humana_ma": "humana"}
+FEEDS = ["cclf", "ma_payer"]
+PAYER_FEEDS = {"cms_ffs": "cclf", "ma_payer": "ma_payer"}
 
 
 class FakeTracker:
@@ -89,7 +89,7 @@ def test_a_clean_run_has_no_problems_and_covers_every_check():
     report = run(1)
     assert report.problems == ()
     assert report.status is Status.PASSED
-    for scope in ["all/task/bronze", "cclf/expectation", "humana/task/silver", "all/answer_keys",
+    for scope in ["all/task/bronze", "cclf/expectation", "ma_payer/task/silver", "all/answer_keys",
                   "cclf/answer_keys", "all/task/gold"]:  # fmt: skip
         assert scope in report.scopes
 
@@ -104,10 +104,10 @@ def test_a_failed_shared_task_is_an_error_for_all_feeds_and_checks_nothing_downs
 
 
 def test_warn_expectation_failures_warn_only_their_feed():
-    pipelines = {"humana": PipelineResult({"claim_amount_format": 4, "keys_present": 0})}
+    pipelines = {"ma_payer": PipelineResult({"claim_amount_format": 4, "keys_present": 0})}
     report = run(3, pipelines=pipelines)
     assert [(p.feed, p.check, p.status) for p in report.problems] == [
-        ("humana", "expectation/claim_amount_format", Status.WARNED)
+        ("ma_payer", "expectation/claim_amount_format", Status.WARNED)
     ]
     assert "4 rows" in report.problems[0].detail
     assert report.status is Status.WARNED
@@ -120,29 +120,29 @@ def test_a_stop_is_stopped_for_that_payer_and_the_other_payer_still_passes():
     assert [(p.feed, p.check, p.status) for p in report.problems] == [
         ("cclf", "expectation/keys_unique", Status.STOPPED)
     ]
-    assert "humana/expectation" in report.scopes
+    assert "ma_payer/expectation" in report.scopes
     assert "cclf/expectation" not in report.scopes  # the stopped update checked only part
 
 
 def test_a_pipeline_failure_without_an_expectation_is_an_error():
-    report = run(5, states(silver_humana_full_refresh="FAILED", silver_humana="EXCLUDED"))
+    report = run(5, states(silver_ma_payer_full_refresh="FAILED", silver_ma_payer="EXCLUDED"))
     assert [(p.feed, p.check, p.status) for p in report.problems] == [
-        ("humana", "task/silver", Status.ERROR)
+        ("ma_payer", "task/silver", Status.ERROR)
     ]
-    assert "silver_humana_full_refresh ended FAILED" in report.problems[0].detail
+    assert "silver_ma_payer_full_refresh ended FAILED" in report.problems[0].detail
 
 
 def test_answer_key_mismatches_are_keyed_by_the_payer_feed():
     answer_keys = {
         "status": "mismatch",
         "mismatches": [
-            {"check": "member_months", "payer_id": "humana_ma", "detail": "3 months differ"},
+            {"check": "member_months", "payer_id": "ma_payer", "detail": "3 months differ"},
             {"check": "switchers", "payer_id": None, "detail": "16 switchers, expected 17"},
         ],
     }
     report = run(6, states(answer_keys="FAILED"), answer_keys=answer_keys)
     assert [(p.feed, p.check) for p in report.problems] == [
-        ("humana", "answer_keys/member_months"),
+        ("ma_payer", "answer_keys/member_months"),
         ("all", "answer_keys/switchers"),
     ]
 
@@ -208,11 +208,11 @@ def test_a_stop_opens_one_issue_comments_while_it_persists_and_closes_on_recover
 
 def test_a_run_that_did_not_reach_a_check_leaves_its_issue_open():
     tracker = FakeTracker()
-    reconcile(run(20, pipelines={"humana": PipelineResult({"amount_format": 1})}), tracker)
+    reconcile(run(20, pipelines={"ma_payer": PipelineResult({"amount_format": 1})}), tracker)
     reconcile(run(21, states(bronze="FAILED")), tracker)
     assert tracker.open_titles() == [
         "[error] all: task/bronze",
-        "[warned] humana: expectation/amount_format",
+        "[warned] ma_payer: expectation/amount_format",
     ]
     reconcile(run(22), tracker)
     assert tracker.open_titles() == []
@@ -220,10 +220,10 @@ def test_a_run_that_did_not_reach_a_check_leaves_its_issue_open():
 
 def test_one_payer_recovering_never_closes_the_other_payers_issue():
     tracker = FakeTracker()
-    both = {"cclf": PipelineResult({"a_format": 1}), "humana": PipelineResult({"b_format": 1})}
+    both = {"cclf": PipelineResult({"a_format": 1}), "ma_payer": PipelineResult({"b_format": 1})}
     reconcile(run(30, pipelines=both), tracker)
-    reconcile(run(31, pipelines={"humana": PipelineResult({"b_format": 2})}), tracker)
-    assert tracker.open_titles() == ["[warned] humana: expectation/b_format"]
+    reconcile(run(31, pipelines={"ma_payer": PipelineResult({"b_format": 2})}), tracker)
+    assert tracker.open_titles() == ["[warned] ma_payer: expectation/b_format"]
 
 
 def test_alert_issues_and_job_issues_never_close_each_other():
@@ -267,9 +267,9 @@ def alert(condition: str, feed: str | None = None, severity: str = "Sev2") -> di
 
 
 def test_a_fired_alert_is_a_problem_for_its_feed_dimension():
-    report = report_from_alert(json.dumps(alert("Fired", feed="humana")))
+    report = report_from_alert(json.dumps(alert("Fired", feed="ma_payer")))
     assert report.problems == (
-        Problem("humana", "alert/files-quarantined", Status.ERROR, "3 in the alert window"),
+        Problem("ma_payer", "alert/files-quarantined", Status.ERROR, "3 in the alert window"),
     )
     assert report.scopes == ()
 

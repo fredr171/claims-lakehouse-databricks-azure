@@ -1,12 +1,12 @@
-# Humana MA member eligibility: one row per member per delivery
+# MA payer member eligibility: one row per member per delivery
 # in which the member is new, changed or terminated (full row, current values).
-# expected_columns: the header of HUM_ELIG_YYYYMM.csv from synthetic-payer-files v1.0.0,
+# expected_columns: the header of MAP_ELIG_YYYYMM.csv from synthetic-payer-files v2.0.0,
 # in order (tests/test_config.py checks them against a generated delivery).
-feed: humana
+feed: ma_payer
 file_type: member_eligibility
 
 # Named groups year and month are required: they give the delivery month.
-file_name_regex: '^HUM_ELIG_(?P<year>\d{4})(?P<month>0[1-9]|1[0-2])\.csv$'
+file_name_regex: '^MAP_ELIG_(?P<year>\d{4})(?P<month>0[1-9]|1[0-2])\.csv$'
 
 # Must be non-empty on every row (the payer's keys for the record).
 key_columns:

@@ -1,4 +1,4 @@
-"""Humana silver against the generator's answer keys (all 36 months, loaded in order).
+"""MA payer silver against the generator's answer keys (all 36 months, loaded in order).
 
 The answer keys are written from the generator's own simulation, not by re-reading the
 CSVs, so matching them exactly is an independent check of staging, member history and
@@ -13,9 +13,9 @@ from decimal import Decimal
 import pytest
 from pyspark.sql import functions as F
 
-from claims_lakehouse.silver.humana import tables as humana_tables
-from claims_lakehouse.silver.humana.amount_rules import amount_problem
-from claims_lakehouse.silver.humana.staging import MEMBER_ELIGIBILITY, MEMBER_TRACKED_COLUMNS
+from claims_lakehouse.silver.ma_payer import tables as ma_payer_tables
+from claims_lakehouse.silver.ma_payer.amount_rules import amount_problem
+from claims_lakehouse.silver.ma_payer.staging import MEMBER_ELIGIBILITY, MEMBER_TRACKED_COLUMNS
 from claims_lakehouse.silver.quality import evaluate
 
 pytestmark = pytest.mark.slow
@@ -43,8 +43,8 @@ FORMS = {"I": "institutional", "P": "professional"}
 @pytest.fixture(scope="module")
 def silver(spark, full_load):
     archive, _ = full_load
-    bronze = {ft: archive.bronze(spark, ft).cache() for ft in humana_tables.FILE_TYPES}
-    tables = humana_tables.build(bronze)
+    bronze = {ft: archive.bronze(spark, ft).cache() for ft in ma_payer_tables.FILE_TYPES}
+    tables = ma_payer_tables.build(bronze)
     for name in ("member_versions", "claim_versions", "claim_families", "stg_medical_claim_lines"):
         tables[name] = tables[name].cache()
     yield tables
@@ -55,7 +55,7 @@ def silver(spark, full_load):
 @pytest.fixture(scope="module")
 def key(generated):
     def read(name):
-        with (generated / "key" / "humana" / name).open(newline="", encoding="utf-8") as f:
+        with (generated / "key" / "ma_payer" / name).open(newline="", encoding="utf-8") as f:
             return list(csv.DictReader(f))
 
     return read
@@ -63,7 +63,7 @@ def key(generated):
 
 @pytest.fixture(scope="module")
 def summary(generated):
-    return json.loads((generated / "key" / "humana" / "summary.json").read_text(encoding="utf-8"))
+    return json.loads((generated / "key" / "ma_payer" / "summary.json").read_text(encoding="utf-8"))
 
 
 def text(value) -> str:
@@ -263,7 +263,7 @@ def test_totals_and_counts_match_the_summary(silver, summary):
 
 
 def test_generated_lines_break_no_amount_rule(silver):
-    """The rules pass on clean data (test_humana_amount_rules shows each one failing)."""
+    """The rules pass on clean data (test_ma_payer_amount_rules shows each one failing)."""
     lines = silver["stg_medical_claim_lines"]
     problems = lines.select(amount_problem().alias("problem")).where("problem is not null")
     assert problems.groupBy("problem").count().collect() == []
@@ -291,6 +291,6 @@ def test_member_id_and_mbi_are_one_to_one(silver):
 def test_clean_deliveries_pass_every_expectation(silver):
     """Every row expectation and gate table passes on the generated data (the quality
     tests show each one failing on broken data)."""
-    for table, expectations in humana_tables.EXPECTATIONS.items():
+    for table, expectations in ma_payer_tables.EXPECTATIONS.items():
         _, results = evaluate(silver[table], expectations)
         assert [r for r in results if not r.passed] == [], table

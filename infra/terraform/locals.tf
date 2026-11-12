@@ -38,11 +38,11 @@ locals {
   # Schemas in the catalog. One silver schema per payer feed, so each payer's pipeline
   # publishes into its own schema.
   schemas = {
-    bronze        = "Every validated delivery, all columns as strings, plus lineage"
-    silver_cclf   = "CMS CCLF (Medicare FFS) silver, written by the CCLF pipeline"
-    silver_humana = "Humana Medicare Advantage silver, written by the Humana pipeline"
-    gold          = "Payer-agnostic marts"
-    ops           = "Answer keys and run bookkeeping"
+    bronze          = "Every validated delivery, all columns as strings, plus lineage"
+    silver_cclf     = "CMS CCLF (Medicare FFS) silver, written by the CCLF pipeline"
+    silver_ma_payer = "Fictional Medicare Advantage payer silver, written by the MA payer pipeline"
+    gold            = "Payer-agnostic marts"
+    ops             = "Answer keys and run bookkeeping"
   }
 
   # In the Function's own storage account.

@@ -14,18 +14,18 @@ from claims_lakehouse.silver.cclf import quality as cclf_quality
 from claims_lakehouse.silver.cclf import tables as cclf_tables
 from claims_lakehouse.silver.cclf.staging import STAGING as CCLF_STAGING
 from claims_lakehouse.silver.common import AMOUNT, DATE, INTEGER, QUANTITY
-from claims_lakehouse.silver.humana import quality as humana_quality
-from claims_lakehouse.silver.humana import tables as humana_tables
-from claims_lakehouse.silver.humana.staging import STAGING as HUMANA_STAGING
+from claims_lakehouse.silver.ma_payer import quality as ma_payer_quality
+from claims_lakehouse.silver.ma_payer import tables as ma_payer_tables
+from claims_lakehouse.silver.ma_payer.staging import STAGING as MA_PAYER_STAGING
 
-ROW_EXPECTATIONS = {**cclf_quality.ROW_EXPECTATIONS, **humana_quality.ROW_EXPECTATIONS}
+ROW_EXPECTATIONS = {**cclf_quality.ROW_EXPECTATIONS, **ma_payer_quality.ROW_EXPECTATIONS}
 TYPES = {
     source: dtype
-    for mapping in (*CCLF_STAGING.values(), *HUMANA_STAGING.values())
+    for mapping in (*CCLF_STAGING.values(), *MA_PAYER_STAGING.values())
     for _, source, dtype in mapping
 }
 BAD_TEXT = {DATE: "2023-1-5", AMOUNT: "12.345", INTEGER: "1.5", QUANTITY: "1.2345"}
-FOLDERS = {"cclf": "cms", "humana": "humana"}
+FOLDERS = {"cclf": "cms", "ma_payer": "ma_payer"}
 
 # Expectations whose broken row is not derived from the name.
 SPECIAL = {"ORIG_CLAIM_ID_links_action": {"CLAIM_FREQ_CD": "7", "ORIG_CLAIM_ID": ""}}
@@ -52,7 +52,7 @@ def test_every_expectation_has_a_broken_row():
 
 def test_tables_carry_the_row_expectations():
     assert cclf_tables.EXPECTATIONS["claims_header_current"] == ROW_EXPECTATIONS["claims_header"]
-    assert set(humana_tables.EXPECTATIONS) >= {
+    assert set(ma_payer_tables.EXPECTATIONS) >= {
         "member_eligibility_current",
         "medical_claim_lines_key_check",
         "medical_claim_line_amount_check",

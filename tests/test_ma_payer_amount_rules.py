@@ -1,10 +1,10 @@
-"""Humana line amount rules: every rule fails on a line deliberately broken to break it."""
+"""MA payer line amount rules: every rule fails on a line deliberately broken to break it."""
 
 from decimal import Decimal
 
 import pytest
 
-from claims_lakehouse.silver.humana.amount_rules import amount_problem
+from claims_lakehouse.silver.ma_payer.amount_rules import amount_problem
 
 LINES = (
     "case string, claim_frequency_code string, claim_status_code string, "

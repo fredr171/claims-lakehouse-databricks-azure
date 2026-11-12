@@ -20,7 +20,7 @@ schema with a MASK on each (claims_lakehouse.silver.masks). The schemas come fro
 build functions run on empty bronze, so they cannot drift from what the tables produce.
 
 Pipeline configuration:
-    claims_lakehouse.feed      cclf | humana
+    claims_lakehouse.feed      cclf | ma_payer
     claims_lakehouse.catalog   the Unity Catalog catalog (bronze is <catalog>.bronze)
 """
 
@@ -35,7 +35,7 @@ from claims_lakehouse.gold.contract import KINDS
 from claims_lakehouse.gold.marts import read_sql, render
 from claims_lakehouse.silver.cclf import tables as cclf_tables
 from claims_lakehouse.silver.deliveries import FILE_KEY
-from claims_lakehouse.silver.humana import tables as humana_tables
+from claims_lakehouse.silver.ma_payer import tables as ma_payer_tables
 from claims_lakehouse.silver.masks import empty_bronze, masked_schema, table_schemas
 from claims_lakehouse.silver.member_history import (
     SEQUENCE_COLUMNS,
@@ -49,7 +49,7 @@ FEED = spark.conf.get("claims_lakehouse.feed")  # noqa: F821 (pipeline global)
 CATALOG = spark.conf.get("claims_lakehouse.catalog")  # noqa: F821
 CONFIG = load_config()
 PAYER = next(p for p in CONFIG.payers if p.feed == FEED)
-TABLES_MODULE = {"cclf": cclf_tables, "humana": humana_tables}[FEED]
+TABLES_MODULE = {"cclf": cclf_tables, "ma_payer": ma_payer_tables}[FEED]
 HISTORY = TABLES_MODULE.MEMBER_HISTORY
 
 GATE = "_gate"

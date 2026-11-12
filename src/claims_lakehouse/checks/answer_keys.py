@@ -6,7 +6,7 @@ what a failed run reports, and the notifier turns it into a GitHub issue.
 
 The keys directory has the generator's layout (synthetic-payer-files):
     <keys>/                 CMS CCLF answer keys, crossover_members.csv, summary.json
-    <keys>/humana/          Humana answer keys, summary.json
+    <keys>/ma_payer/          MA payer answer keys, summary.json
 Member months have no answer key, so write_member_month_keys() adds member_months.csv to
 each payer's key folder, counted independently from the delivered eligibility files with
 the generator's own coverage-span rule. It needs the generator package (a dev dependency);
@@ -31,7 +31,7 @@ from pyspark.sql import functions as F
 
 from claims_lakehouse.config import LakehouseConfig
 
-KEY_DIRS = {"cms_ffs": ".", "humana_ma": "humana"}
+KEY_DIRS = {"cms_ffs": ".", "ma_payer": "ma_payer"}
 MEMBER_MONTHS_FILE = "member_months.csv"
 SWITCHERS = 17  # payer switchers in the generated data (seed 42)
 
@@ -39,7 +39,7 @@ SWITCHERS = 17  # payer switchers in the generated data (seed 42)
 ELIGIBILITY = {
     "cms_ffs": ("cms", "beneficiary_demographics", "BENE_MBI_ID", "BENE_RNG_BGN_DT",
                 "BENE_RNG_END_DT", "BENE_DEATH_DT", "BENE_MBI_ID"),
-    "humana_ma": ("humana", "member_eligibility", "MEMBER_ID", "ENROLLMENT_START_DT",
+    "ma_payer": ("ma_payer", "member_eligibility", "MEMBER_ID", "ENROLLMENT_START_DT",
                   "ENROLLMENT_END_DT", "DEATH_DT", "MBI"),
 }  # fmt: skip
 
@@ -139,11 +139,11 @@ def check_gold(marts: Mapping[str, DataFrame], keys: Path) -> list[Mismatch]:
             )
 
     cms = json.loads(_key(keys, "cms_ffs", "summary.json").read_text(encoding="utf-8"))
-    hum = json.loads(_key(keys, "humana_ma", "summary.json").read_text(encoding="utf-8"))
+    ma = json.loads(_key(keys, "ma_payer", "summary.json").read_text(encoding="utf-8"))
     expected_statuses = {
-        "VOIDED": cms["cancellations"] + hum["voids"],
-        "ADJUSTED": cms["adjustments"] + hum["replacements"],
-        "DENIED": hum["denied"],
+        "VOIDED": cms["cancellations"] + ma["voids"],
+        "ADJUSTED": cms["adjustments"] + ma["replacements"],
+        "DENIED": ma["denied"],
     }
     statuses = {
         r.claim_status: r["count"] for r in claims.groupBy("claim_status").count().collect()
@@ -157,7 +157,7 @@ def check_gold(marts: Mapping[str, DataFrame], keys: Path) -> list[Mismatch]:
     for row in crossover:
         switches[row["BENE_MBI_ID"]].append(row)
     expected_switchers = {
-        mbi: (len(rows) + 1, "humana_ma" if rows[-1]["direction"] == "FFS_TO_MA" else "cms_ffs")
+        mbi: (len(rows) + 1, "ma_payer" if rows[-1]["direction"] == "FFS_TO_MA" else "cms_ffs")
         for mbi, rows in switches.items()
     }
     actual_switchers = {
@@ -192,7 +192,7 @@ def check_gold(marts: Mapping[str, DataFrame], keys: Path) -> list[Mismatch]:
 def expected_member_months(config: LakehouseConfig, generated: Path, payer_id: str) -> dict:
     """Month -> members covered any day of it, from every delivered eligibility file.
 
-    generated: the generator's output root (cms/YYYY-MM/..., humana/YYYY-MM/...).
+    generated: the generator's output root (cms/YYYY-MM/..., ma_payer/YYYY-MM/...).
     """
     from synthetic_payer_files.cclf_common import coverage_spans  # dev dependency
 

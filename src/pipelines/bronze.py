@@ -25,7 +25,7 @@ from claims_lakehouse.bronze.lineage import (
 )
 from claims_lakehouse.config import FileType, load_config
 from claims_lakehouse.silver.cclf import tables as cclf_tables
-from claims_lakehouse.silver.humana import tables as humana_tables
+from claims_lakehouse.silver.ma_payer import tables as ma_payer_tables
 from claims_lakehouse.silver.masks import empty_bronze, masked_schema
 
 ARCHIVE_URL = spark.conf.get("claims_lakehouse.archive_url")  # noqa: F821 (pipeline global)
@@ -33,7 +33,7 @@ CATALOG = spark.conf.get("claims_lakehouse.catalog")  # noqa: F821
 CONFIG = load_config()
 PROTECTED = {
     module.MEMBER_HISTORY.file_type: module.PROTECTED_COLUMNS
-    for module in (cclf_tables, humana_tables)
+    for module in (cclf_tables, ma_payer_tables)
 }
 
 # A path outside the archive layout has no month or checksum: never load it.

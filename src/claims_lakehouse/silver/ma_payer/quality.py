@@ -1,4 +1,4 @@
-"""Humana quality: row expectations on each file's current rows, and its gate tables.
+"""MA payer quality: row expectations on each file's current rows, and its gate tables.
 
 Stop (FAIL) when a value would make silver wrong: the MBI (gold keys people by it),
 enrollment dates, the claim frequency, status and form codes, the link from a reversal or
@@ -11,8 +11,8 @@ Line amount rules are a gate table, not a row expectation: one odd line warns, m
 
 from __future__ import annotations
 
-from claims_lakehouse.silver.humana.claim_families import ORIGINAL, REPLACEMENT, VOID
-from claims_lakehouse.silver.humana.staging import STAGING
+from claims_lakehouse.silver.ma_payer.claim_families import ORIGINAL, REPLACEMENT, VOID
+from claims_lakehouse.silver.ma_payer.staging import STAGING
 from claims_lakehouse.silver.quality import (
     Action,
     Expectation,

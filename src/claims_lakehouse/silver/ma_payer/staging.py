@@ -1,11 +1,11 @@
-"""Humana staging: readable names and types for HUM_ELIG and HUM_MEDCLM.
+"""MA payer staging: readable names and types for MAP_ELIG and MAP_MEDCLM.
 
 Input is bronze rows from current deliveries only (claims_lakehouse.silver.deliveries).
 No rows are filtered or de-duplicated here. Names follow the sibling repo
 (claims-lakehouse-dbt-duckdb) and match CCLF's where the meaning is the same
 (beneficiary_mbi, claim_start_date, paid_amount, ...).
 
-HUM_ELIG holds synthetic names, addresses and birth dates: Unity Catalog column masks
+MAP_ELIG holds synthetic names, addresses and birth dates: Unity Catalog column masks
 protect them in silver, and gold never selects them.
 """
 
@@ -118,7 +118,7 @@ STAGING = {
 
 
 def stage_file(current_bronze: DataFrame, file_type: str) -> DataFrame:
-    """Stage one Humana file type from its current-delivery bronze rows."""
+    """Stage one MA payer file type from its current-delivery bronze rows."""
     return stage(current_bronze, STAGING[file_type])
 
 

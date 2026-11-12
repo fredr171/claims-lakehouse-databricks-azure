@@ -9,7 +9,7 @@ The task then fails if the run stopped or errored. It is the run's last task, so
 that a stopped payer could still leave the run marked as succeeded.
 
     report_outcome.py --src <synced src folder> --run-id {{job.run_id}}
-                      --pipeline cclf=<pipeline id> --pipeline humana=<pipeline id>
+                      --pipeline cclf=<pipeline id> --pipeline ma_payer=<pipeline id>
                       --secret-scope <scope>
 """
 

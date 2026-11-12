@@ -1,5 +1,5 @@
 # CCLF1 Part A claim header: one row per claim version.
-# expected_columns: the header of CCLF1_YYYYMM.csv from synthetic-payer-files v1.0.0,
+# expected_columns: the header of CCLF1_YYYYMM.csv from synthetic-payer-files v2.0.0,
 # in order (tests/test_config.py checks them against a generated delivery).
 feed: cclf
 file_type: claims_header

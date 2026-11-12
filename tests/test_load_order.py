@@ -19,8 +19,8 @@ from lakehouse import LocalLakehouse, snapshot
 
 pytestmark = pytest.mark.slow
 
-FEED_OF = {"beneficiary_demographics": "cclf", "member_eligibility": "humana",
-           "medical_claim_lines": "humana"}  # fmt: skip
+FEED_OF = {"beneficiary_demographics": "cclf", "member_eligibility": "ma_payer",
+           "medical_claim_lines": "ma_payer"}  # fmt: skip
 
 
 def outputs(lakehouse):
@@ -56,8 +56,11 @@ def corrections(config, generated):
         if r["RECORD_CHANGE_TYPE"] == "NEW" and r["BENE_MBI_ID"] not in later
     )
     changed = next(r["BENE_MBI_ID"] for r in feb if r["RECORD_CHANGE_TYPE"] == "UPDATE")
-    replacement_row = next(
-        r for r in read_rows(file("medical_claim_lines", "2024-03")) if r["CLAIM_FREQ_CD"] == "7"
+    claims_month, replacement_row = next(
+        (m, r)
+        for m in months("2024-01")
+        for r in read_rows(file("medical_claim_lines", m))
+        if r["CLAIM_FREQ_CD"] == "7"
     )
     replacement, replaced_family = replacement_row["CLAIM_ID"], replacement_row["ORIG_CLAIM_ID"]
     update = next(
@@ -69,7 +72,7 @@ def corrections(config, generated):
         ("beneficiary_demographics", "2023-02"): (
             lambda rows: [r for r in rows if r["BENE_MBI_ID"] not in (gone, changed)]
         ),
-        ("medical_claim_lines", "2024-03"): (
+        ("medical_claim_lines", claims_month): (
             lambda rows: [
                 r for r in rows if not (r["CLAIM_ID"] == replacement and r["CLAIM_FREQ_CD"] == "7")
             ]
@@ -96,7 +99,7 @@ def loads(spark, config, generated, tmp_path_factory):
     in_order.update()
 
     # Shuffled across feeds and months, in two uneven batches.
-    folders = {"cclf": "cms", "humana": "humana"}
+    folders = {"cclf": "cms", "ma_payer": "ma_payer"}
     files = [
         (feed, path)
         for month in months()
@@ -156,14 +159,14 @@ def test_resent_corrections_are_retracted(loads):
         & (beneficiaries.valid_from == "2023-02")
     )
     assert no_feb.count() == 0
-    members = lakehouse.published["humana_ma"]["member_versions"]
+    members = lakehouse.published["ma_payer"]["member_versions"]
     assert (
         members.where(
             (members.member_id == removed["update"]) & (members.valid_from == "2024-05")
         ).count()
         == 0
     )
-    families = lakehouse.published["humana_ma"]["claim_families"]
+    families = lakehouse.published["ma_payer"]["claim_families"]
     [family] = families.where(families.claim_family_key == removed["replaced_family"]).collect()
     assert (family.family_status, family.net_paid_amount) == ("VOIDED", 0)
     assert (family.reversal_count, family.replacement_count) == (1, 0)
