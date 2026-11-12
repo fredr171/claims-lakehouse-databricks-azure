@@ -1,0 +1,105 @@
+# The lakehouse job: a file arriving in the archive starts it.
+#
+#   create_masks -> bronze -> per payer: prepare -> full refresh? -> silver (full or incremental)
+#          -> gold (runs even if a payer stopped) -> answer-key check
+#
+# One run at a time, so a feed never has two runs in flight. Python tasks run on serverless.
+
+resources:
+  jobs:
+    lakehouse:
+      name: claims-lakehouse
+      max_concurrent_runs: 1
+      trigger:
+        pause_status: UNPAUSED
+        file_arrival:
+          url: ${var.archive_url}
+          # Wait for a delivery's files to finish landing before starting a run.
+          wait_after_last_change_seconds: 120
+          min_time_between_triggers_seconds: 300
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+            dependencies:
+              - pyyaml>=6
+
+      tasks:
+        # The pipelines' schemas name the column-mask functions, so they come first.
+        - task_key: create_masks
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/jobs/create_masks.py
+            parameters: [--src, "${workspace.file_path}/src", --catalog, "${var.catalog}", --group, "${var.pii_readers_group}"]
+        - task_key: bronze
+          depends_on: [{ task_key: create_masks }]
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.bronze.id}
+
+        # --- CMS CCLF ----------------------------------------------------------------------
+        - task_key: prepare_cclf
+          depends_on: [{ task_key: bronze }]
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/jobs/prepare_payer.py
+            parameters: [--src, "${workspace.file_path}/src", --catalog, "${var.catalog}", --feed, cclf]
+        - task_key: full_refresh_cclf
+          depends_on: [{ task_key: prepare_cclf }]
+          condition_task:
+            op: EQUAL_TO
+            left: "{{tasks.prepare_cclf.values.full_refresh}}"
+            right: "true"
+        - task_key: silver_cclf_full_refresh
+          depends_on: [{ task_key: full_refresh_cclf, outcome: "true" }]
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.silver_cclf.id}
+            full_refresh: true
+        - task_key: silver_cclf
+          depends_on: [{ task_key: full_refresh_cclf, outcome: "false" }]
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.silver_cclf.id}
+
+        # --- Humana MA ---------------------------------------------------------------------
+        - task_key: prepare_humana
+          depends_on: [{ task_key: bronze }]
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/jobs/prepare_payer.py
+            parameters: [--src, "${workspace.file_path}/src", --catalog, "${var.catalog}", --feed, humana]
+        - task_key: full_refresh_humana
+          depends_on: [{ task_key: prepare_humana }]
+          condition_task:
+            op: EQUAL_TO
+            left: "{{tasks.prepare_humana.values.full_refresh}}"
+            right: "true"
+        - task_key: silver_humana_full_refresh
+          depends_on: [{ task_key: full_refresh_humana, outcome: "true" }]
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.silver_humana.id}
+            full_refresh: true
+        - task_key: silver_humana
+          depends_on: [{ task_key: full_refresh_humana, outcome: "false" }]
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.silver_humana.id}
+
+        # --- Gold and the answer keys ------------------------------------------------------
+        - task_key: gold
+          # ALL_DONE: a stopped payer keeps its last good silver, and the other payer's
+          # results still reach gold.
+          run_if: ALL_DONE
+          depends_on:
+            - task_key: silver_cclf
+            - task_key: silver_cclf_full_refresh
+            - task_key: silver_humana
+            - task_key: silver_humana_full_refresh
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/jobs/publish_gold.py
+            parameters: [--src, "${workspace.file_path}/src", --catalog, "${var.catalog}"]
+        - task_key: answer_keys
+          depends_on: [{ task_key: gold }]
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/jobs/check_answer_keys.py
+            parameters: [--src, "${workspace.file_path}/src", --catalog, "${var.catalog}"]

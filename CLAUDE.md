@@ -116,6 +116,9 @@ check → job outcomes go to the **notifier Azure Function** → GitHub issues.
   feeding AUTO CDC only from current deliveries and running a full refresh of the affected flow
   when a supersession occurs). The chosen approach must pass the answer-key re-send tests.
   Document the decision in the README.
+  **Decided:** AUTO CDC reads current deliveries only, and a job task full-refreshes the
+  payer pipeline when bronze holds more superseded member-file deliveries than the pipeline
+  last published (a pipeline task cannot full-refresh a single flow).
 - **Claim families** (an original plus later reversals or replacements) and net paid are
   materialized views over current deliveries. Status comes from which versions are active,
   never from file order.

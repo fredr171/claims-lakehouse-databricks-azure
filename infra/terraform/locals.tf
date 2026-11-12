@@ -15,10 +15,31 @@ locals {
     databricks          = "dbw-${local.project}-${var.environment}"
     databricks_managed  = "rg-${local.project}-${var.environment}-databricks"
     access_connector    = "dbac-${local.project}-${var.environment}"
+    storage_credential  = "claims_lakehouse_lake_${var.environment}"
+    catalog             = "claims_lakehouse_${var.environment}"
+    runner              = "${local.project}-runner-${var.environment}"
+    pii_readers         = "${local.project}-pii-readers-${var.environment}"
   }
 
-  # Containers in the lake account, in flow order (see the README).
-  lake_containers = ["landing", "archive", "quarantine"]
+  # Unity Catalog privileges of the runner (runner.tf).
+  runner_privileges = {
+    data = ["USE_SCHEMA", "SELECT", "MODIFY", "CREATE_TABLE", "CREATE_MATERIALIZED_VIEW"]
+    ops  = ["USE_SCHEMA", "CREATE_FUNCTION", "EXECUTE", "READ_VOLUME"]
+  }
+
+  # Containers in the lake account, in flow order (see the README). `unity` holds the
+  # catalog's managed tables.
+  lake_containers = ["landing", "archive", "quarantine", "unity"]
+
+  # Schemas in the catalog. One silver schema per payer feed, so each payer's pipeline
+  # publishes into its own schema.
+  schemas = {
+    bronze        = "Every validated delivery, all columns as strings, plus lineage"
+    silver_cclf   = "CMS CCLF (Medicare FFS) silver, written by the CCLF pipeline"
+    silver_humana = "Humana Medicare Advantage silver, written by the Humana pipeline"
+    gold          = "Payer-agnostic marts"
+    ops           = "Answer keys and run bookkeeping"
+  }
 
   # In the Function's own storage account.
   func_deploy_container      = "app-package"

@@ -88,6 +88,56 @@ def member_versions(
     )
 
 
+def history_source(staged: DataFrame, key: str, tracked: Sequence[str]) -> DataFrame:
+    """What the pipeline feeds AUTO CDC: the key, the tracked columns, and the delivery
+    month (untracked, so AUTO CDC updates it in place: the version's last delivery month).
+    Sequence by struct(_delivery_month, _archived_at), excluding _archived_at."""
+    return staged.select(key, *tracked, *SEQUENCE_COLUMNS)
+
+
+def versions_from_history(
+    history: DataFrame, key: str, tracked: Sequence[str], coverage_end: str
+) -> DataFrame:
+    """member_versions() columns from an AUTO CDC SCD type 2 table of history_source().
+
+    AUTO CDC gives one row per version with __START_AT / __END_AT (the sequence values of
+    the version's first row and of the next version's first row) and the untracked
+    _delivery_month of the version's last row. The rest is derived the same way as in
+    member_versions().
+    """
+    if coverage_end not in tracked:
+        raise ValueError(f"coverage_end {coverage_end!r} must be a tracked column")
+    start = F.col("__START_AT")
+    by_version = Window.partitionBy(key).orderBy(
+        start.getField("_delivery_month"), start.getField("_archived_at")
+    )
+    previous = F.lag(F.struct(*tracked)).over(by_version)
+    changed = F.array_compact(
+        F.array(*[F.when(~F.col(c).eqNullSafe(previous[c]), F.lit(c)) for c in tracked])
+    )
+    change_type = (
+        F.when(previous.isNull(), "NEW")
+        .when(previous[coverage_end].isNull() & F.col(coverage_end).isNotNull(), "TERMINATE")
+        .otherwise("UPDATE")
+    )
+    return history.select(
+        key,
+        F.row_number().over(by_version).cast("long").alias("version_number"),  # as in batch
+        start.getField("_delivery_month").alias("valid_from"),
+        F.col("__END_AT").getField("_delivery_month").alias("valid_to"),
+        F.col("__END_AT").isNull().alias("is_current"),
+        change_type.alias("change_type"),
+        F.when(previous.isNull(), F.array().cast("array<string>"))
+        .otherwise(changed)
+        .alias("changed_columns"),
+        *tracked,
+        F.min(start.getField("_delivery_month"))
+        .over(Window.partitionBy(key))
+        .alias("first_delivery_month"),
+        F.col("_delivery_month").alias("last_delivery_month"),
+    )
+
+
 def current_members(versions: DataFrame) -> DataFrame:
     """The current version of every member."""
     return versions.where("is_current")

@@ -10,6 +10,14 @@ terraform {
       source  = "azure/azapi"
       version = "~> 2.0"
     }
+    databricks = {
+      source  = "databricks/databricks"
+      version = "~> 1.0"
+    }
+    http = {
+      source  = "hashicorp/http"
+      version = "~> 3.0"
+    }
   }
 
   # Partial configuration: the values come from backend.hcl, which
@@ -44,3 +52,11 @@ provider "azurerm" {
 # Only for resources azurerm cannot express correctly (see functions.tf). Uses the same
 # Azure CLI sign-in and ARM_SUBSCRIPTION_ID as azurerm.
 provider "azapi" {}
+
+# Workspace-level Unity Catalog objects (unity_catalog.tf), as the Azure CLI user, who is
+# workspace admin. The workspace is created in this same configuration.
+provider "databricks" {
+  host                        = "https://${azurerm_databricks_workspace.main.workspace_url}"
+  azure_workspace_resource_id = azurerm_databricks_workspace.main.id
+  auth_type                   = "azure-cli"
+}
