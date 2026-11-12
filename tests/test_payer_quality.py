@@ -17,6 +17,7 @@ from claims_lakehouse.silver.common import AMOUNT, DATE, INTEGER, QUANTITY
 from claims_lakehouse.silver.ma_payer import quality as ma_payer_quality
 from claims_lakehouse.silver.ma_payer import tables as ma_payer_tables
 from claims_lakehouse.silver.ma_payer.staging import STAGING as MA_PAYER_STAGING
+from claims_lakehouse.silver.quality import VERSION_LINES_AGREE
 
 ROW_EXPECTATIONS = {**cclf_quality.ROW_EXPECTATIONS, **ma_payer_quality.ROW_EXPECTATIONS}
 TYPES = {
@@ -56,7 +57,10 @@ def test_tables_carry_the_row_expectations():
         "member_eligibility_current",
         "medical_claim_lines_key_check",
         "medical_claim_line_amount_check",
+        "claim_version_check",
     }
+    assert cclf_tables.EXPECTATIONS["part_b_version_check"] == [VERSION_LINES_AGREE]
+    assert ma_payer_tables.EXPECTATIONS["claim_version_check"] == [VERSION_LINES_AGREE]
 
 
 def delivered_row(config, generated, file_type: str) -> dict[str, str | None]:

@@ -11,7 +11,12 @@ from functools import partial
 
 from pyspark.sql import DataFrame
 
-from claims_lakehouse.silver.cclf.claim_families import claim_families, claim_versions
+from claims_lakehouse.silver.cclf.claim_families import (
+    PART_B_LINE_AGREED_COLUMNS,
+    PART_B_VERSION_KEY,
+    claim_families,
+    claim_versions,
+)
 from claims_lakehouse.silver.cclf.quality import ROW_EXPECTATIONS, UNIQUE_KEYS
 from claims_lakehouse.silver.cclf.staging import (
     BENEFICIARY_DEMOGRAPHICS,
@@ -21,7 +26,12 @@ from claims_lakehouse.silver.cclf.staging import (
 from claims_lakehouse.silver.deliveries import current_rows, delivery_index
 from claims_lakehouse.silver.masks import protected_names
 from claims_lakehouse.silver.member_history import member_versions
-from claims_lakehouse.silver.quality import KEYS_UNIQUE, duplicate_key_check
+from claims_lakehouse.silver.quality import (
+    KEYS_UNIQUE,
+    VERSION_LINES_AGREE,
+    duplicate_key_check,
+    version_conflict_check,
+)
 from claims_lakehouse.silver.spec import (
     MemberHistory,
     SilverTable,
@@ -87,6 +97,16 @@ TABLES: list[SilverTable] = [
             coverage_end=MEMBER_HISTORY.coverage_end,
         ),
         published=True,
+    ),
+    SilverTable(
+        "part_b_version_check",
+        ("stg_part_b_physician_lines",),
+        partial(
+            version_conflict_check,
+            version_key=PART_B_VERSION_KEY,
+            columns=PART_B_LINE_AGREED_COLUMNS,
+        ),
+        (VERSION_LINES_AGREE,),
     ),
     SilverTable(
         "claim_versions", ("stg_claims_header", "stg_part_b_physician_lines"), claim_versions

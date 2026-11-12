@@ -7,6 +7,7 @@ from claims_lakehouse.silver.common import AMOUNT, DATE, INTEGER, QUANTITY
 from claims_lakehouse.silver.quality import (
     KEYS_UNIQUE,
     RULE_BREAK_EXPECTATIONS,
+    VERSION_LINES_AGREE,
     Action,
     Expectation,
     duplicate_key_check,
@@ -16,6 +17,7 @@ from claims_lakehouse.silver.quality import (
     one_of,
     present,
     rule_breaks_by_month,
+    version_conflict_check,
 )
 
 # --- evaluate() follows Lakeflow's warn / drop / fail ---------------------------------------
@@ -160,6 +162,29 @@ def test_duplicate_keys_within_a_file_or_across_files(spark):
     assert counts == {"2023-01": 3, "2023-02": 1}
     _, [result] = evaluate(across, [KEYS_UNIQUE])
     assert result.stops and result.failed_rows == 2  # both months fail
+
+
+def test_claim_version_lines_that_disagree_stop(spark):
+    # (month, claim, frequency, status, member): one row per line
+    lines = spark.createDataFrame(
+        [
+            ("2023-01", "C1", "1", "P", "M1"),  # C1: two lines that agree
+            ("2023-01", "C1", "1", "P", "M1"),
+            ("2023-01", "C2", "1", "P", "M1"),  # C2: lines disagree on status
+            ("2023-01", "C2", "1", "D", "M1"),
+            ("2023-02", "C3", "1", "P", "M2"),  # C3: one line missing the member
+            ("2023-02", "C3", "1", "P", None),
+            ("2023-02", "C3", "8", "R", "M2"),  # another version of C3: a separate group
+            ("2023-03", "C4", "1", "P", None),  # C4: both lines NULL: they agree
+            ("2023-03", "C4", "1", "P", None),
+        ],
+        "_delivery_month string, claim_id string, freq string, status string, member string",
+    )
+    check = version_conflict_check(lines, ["claim_id", "freq"], ["status", "member"]).cache()
+    got = {r._delivery_month: (r.version_count, r.conflicting_versions) for r in check.collect()}
+    assert got == {"2023-01": (2, 1), "2023-02": (2, 1), "2023-03": (1, 0)}
+    _, [result] = evaluate(check, [VERSION_LINES_AGREE])
+    assert result.stops and result.failed_rows == 2  # months 01 and 02
 
 
 # month -> (lines, broken lines, warns, stops)

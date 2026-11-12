@@ -13,7 +13,12 @@ from pyspark.sql import DataFrame
 
 from claims_lakehouse.silver.deliveries import current_rows, delivery_index
 from claims_lakehouse.silver.ma_payer.amount_rules import amount_problem
-from claims_lakehouse.silver.ma_payer.claim_families import claim_families, claim_versions
+from claims_lakehouse.silver.ma_payer.claim_families import (
+    LINE_AGREED_COLUMNS,
+    VERSION_KEY,
+    claim_families,
+    claim_versions,
+)
 from claims_lakehouse.silver.ma_payer.quality import ROW_EXPECTATIONS, UNIQUE_KEYS
 from claims_lakehouse.silver.ma_payer.staging import (
     MEMBER_ELIGIBILITY,
@@ -25,8 +30,10 @@ from claims_lakehouse.silver.member_history import member_versions
 from claims_lakehouse.silver.quality import (
     KEYS_UNIQUE,
     RULE_BREAK_EXPECTATIONS,
+    VERSION_LINES_AGREE,
     duplicate_key_check,
     rule_breaks_by_month,
+    version_conflict_check,
 )
 from claims_lakehouse.silver.spec import (
     MemberHistory,
@@ -98,6 +105,12 @@ TABLES: list[SilverTable] = [
         ("stg_medical_claim_lines",),
         _amount_check,
         tuple(RULE_BREAK_EXPECTATIONS),
+    ),
+    SilverTable(
+        "claim_version_check",
+        ("stg_medical_claim_lines",),
+        partial(version_conflict_check, version_key=VERSION_KEY, columns=LINE_AGREED_COLUMNS),
+        (VERSION_LINES_AGREE,),
     ),
     SilverTable("claim_versions", ("stg_medical_claim_lines",), claim_versions),
     SilverTable("claim_families", ("claim_versions",), claim_families, published=True),

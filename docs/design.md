@@ -129,6 +129,11 @@ its claim voided. Every result equals a clean load of the corrected files.
   - **Duplicate keys:** fail.
   - **MA payer line amount rules:** any broken line warns; the month stops when more than 1%
     and at least 5 of its lines break a rule (a broken extract, not one odd line).
+  - **Lines of one claim version must agree:** fail. Line-level files (CCLF5, MAP_MEDCLM)
+    roll up to claim versions with `F.first` for fields such as status, adjustment type,
+    member and contract, which is only correct when every line carries the same value.
+    NULL counts as a value (`version_conflict_check`; `part_b_version_check`,
+    `claim_version_check`).
 
   Gate tables read every current delivery, so a bad month keeps stopping later runs until a
   corrected re-send replaces it.

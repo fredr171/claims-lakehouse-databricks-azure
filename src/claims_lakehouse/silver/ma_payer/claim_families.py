@@ -36,9 +36,25 @@ ORIGINAL, REPLACEMENT, VOID = "1", "7", "8"
 DENIED = "D"
 CAPITATED = "Y"
 
+# Claim version (line rollup) key, and the columns it takes from any one line. Every line of
+# a version must agree on them: the claim_version_check gate table stops the payer otherwise.
+VERSION_KEY = ("claim_id", "claim_frequency_code")
+LINE_AGREED_COLUMNS = (
+    "original_claim_id",
+    "claim_status_code",
+    "claim_form_type_code",
+    "member_id",
+    "beneficiary_mbi",
+    "contract_id",
+)
+
 
 def claim_versions(claim_lines: DataFrame) -> DataFrame:
-    """One row per claim version: (claim_id, claim_frequency_code) in a delivery."""
+    """One row per claim version: (claim_id, claim_frequency_code) in a delivery.
+
+    F.first is safe: every line of a version agrees on LINE_AGREED_COLUMNS
+    (claim_version_check stops the payer otherwise).
+    """
     return claim_lines.groupBy(
         "claim_id", "claim_frequency_code", F.col("_delivery_month").alias("delivery_month")
     ).agg(
