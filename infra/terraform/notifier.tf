@@ -13,12 +13,21 @@ resource "azurerm_role_assignment" "notifier_key_vault" {
   principal_id         = azapi_resource.function["notifier"].identity[0].principal_id
 }
 
+# The keys come from the app's host runtime, which on a new app starts only once its
+# storage role works: until then the call fails with InternalServerError, so retry.
 data "azapi_resource_action" "notifier_keys" {
   type                   = "Microsoft.Web/sites/host@2025-03-01"
   resource_id            = "${azapi_resource.function["notifier"].id}/host/default"
   action                 = "listkeys"
   method                 = "POST"
   response_export_values = ["functionKeys.default"]
+
+  retry = {
+    error_message_regex  = ["InternalServerError", "host runtime"]
+    interval_seconds     = 15
+    max_interval_seconds = 60
+  }
+  depends_on = [azurerm_role_assignment.func_blob]
 }
 
 locals {
