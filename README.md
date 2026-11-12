@@ -239,6 +239,13 @@ in archive                              └─► prepare_humana ► full refres
 - **File-arrival trigger on the archive**, so the job sees only validated files. It waits
   for a quiet period before starting, so one month's files usually make one run. One run at
   a time.
+  **Open issue (first live run):** the trigger has not fired yet. Unity Catalog turns
+  **file events** on for new external locations, and the trigger then reads them instead of
+  listing the archive. The first setup failed (403 creating the queue) because the access
+  connector lacked the roles Databricks needs. Terraform now grants those roles and
+  declares the file events with a managed queue. Databricks accepted that, but the queue
+  stayed "being provisioned" for over 30 minutes and never appeared in Azure. The live
+  runs were started by hand; to be resolved in phase 4.
 - **Gold runs even when a payer stopped** (`run_if: ALL_DONE`): the stopped payer's tables
   keep their last good update, and the run still ends failed.
 - **The last task compares gold with the answer keys** (`claims_lakehouse/checks/`) and
